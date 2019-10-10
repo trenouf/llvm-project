@@ -371,6 +371,7 @@ protected:
   bool CaymanISA;
   bool CFALUBug;
   bool LDSMisalignedBug;
+  bool HasMFMAInlineLiteralBug;
   bool HasVertexCache;
   short TexVTXClauseSize;
   bool ScalarizeGlobal;
@@ -425,7 +426,7 @@ public:
     return CallLoweringInfo.get();
   }
 
-  const InstructionSelector *getInstructionSelector() const override {
+  InstructionSelector *getInstructionSelector() const override {
     return InstSelector.get();
   }
 
@@ -550,6 +551,10 @@ public:
   }
 
   bool hasSwap() const {
+    return GFX9Insts;
+  }
+
+  bool hasScalarPackInsts() const {
     return GFX9Insts;
   }
 
@@ -992,6 +997,10 @@ public:
 
   bool hasSGPRInitBug() const {
     return SGPRInitBug;
+  }
+
+  bool hasMFMAInlineLiteralBug() const {
+    return HasMFMAInlineLiteralBug;
   }
 
   bool has12DWordStoreHazard() const {

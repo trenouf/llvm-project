@@ -31,7 +31,11 @@ static Optional<object::SectionRef>
 getSectionByName(const object::ObjectFile &Obj, StringRef SecName) {
   for (const object::SectionRef &Section : Obj.sections()) {
     StringRef SectionName;
-    Section.getName(SectionName);
+    if (Expected<StringRef> NameOrErr = Section.getName())
+      SectionName = *NameOrErr;
+    else
+      consumeError(NameOrErr.takeError());
+
     SectionName = SectionName.substr(SectionName.find_first_not_of("._"));
     if (SectionName != SecName)
       continue;
@@ -87,7 +91,7 @@ bool DwarfStreamer::init(Triple TheTriple) {
     MIP = TheTarget->createMCInstPrinter(TheTriple, MAI->getAssemblerDialect(),
                                          *MAI, *MII, *MRI);
     MS = TheTarget->createAsmStreamer(
-        *MC, llvm::make_unique<formatted_raw_ostream>(OutFile), true, true, MIP,
+        *MC, std::make_unique<formatted_raw_ostream>(OutFile), true, true, MIP,
         std::unique_ptr<MCCodeEmitter>(MCE), std::unique_ptr<MCAsmBackend>(MAB),
         true);
     break;
@@ -256,7 +260,7 @@ void DwarfStreamer::emitAppleTypes(
 /// Emit the swift_ast section stored in \p Buffers.
 void DwarfStreamer::emitSwiftAST(StringRef Buffer) {
   MCSection *SwiftASTSection = MOFI->getDwarfSwiftASTSection();
-  SwiftASTSection->setAlignment(1 << 5);
+  SwiftASTSection->setAlignment(llvm::Align(32));
   MS->SwitchSection(SwiftASTSection);
   MS->EmitBytes(Buffer);
 }
@@ -335,7 +339,7 @@ void DwarfStreamer::emitUnitRangesEntries(CompileUnit &Unit,
         sizeof(int8_t);   // Segment Size (in bytes)
 
     unsigned TupleSize = AddressSize * 2;
-    unsigned Padding = OffsetToAlignment(HeaderSize, TupleSize);
+    unsigned Padding = offsetToAlignment(HeaderSize, llvm::Align(TupleSize));
 
     Asm->EmitLabelDifference(EndLabel, BeginLabel, 4); // Arange length
     Asm->OutStreamer->EmitLabel(BeginLabel);

@@ -177,6 +177,7 @@ def int_amdgcn_implicit_buffer_ptr :
 
 // Set EXEC to the 64-bit value given.
 // This is always moved to the beginning of the basic block.
+// FIXME: Should be mangled for wave size.
 def int_amdgcn_init_exec : Intrinsic<[],
   [llvm_i64_ty],      // 64-bit literal constant
   [IntrConvergent, ImmArg<0>]>;
@@ -187,7 +188,7 @@ def int_amdgcn_init_exec : Intrinsic<[],
 def int_amdgcn_init_exec_from_input : Intrinsic<[],
   [llvm_i32_ty,       // 32-bit SGPR input
    llvm_i32_ty],      // bit offset of the thread count
-  [IntrConvergent]>;
+  [IntrConvergent, ImmArg<1>]>;
 
 def int_amdgcn_wavefrontsize :
   GCCBuiltin<"__builtin_amdgcn_wavefrontsize">,
@@ -208,7 +209,7 @@ def int_amdgcn_s_sendmsghalt : GCCBuiltin<"__builtin_amdgcn_s_sendmsghalt">,
   [ImmArg<0>, IntrNoMem, IntrHasSideEffects]>;
 
 def int_amdgcn_s_barrier : GCCBuiltin<"__builtin_amdgcn_s_barrier">,
-  Intrinsic<[], [], [IntrConvergent]>;
+  Intrinsic<[], [], [IntrNoMem, IntrHasSideEffects, IntrConvergent]>;
 
 def int_amdgcn_wave_barrier : GCCBuiltin<"__builtin_amdgcn_wave_barrier">,
   Intrinsic<[], [], [IntrConvergent]>;
@@ -1277,10 +1278,7 @@ def int_amdgcn_interp_p2_f16 :
 
 // Pixel shaders only: whether the current pixel is live (i.e. not a helper
 // invocation for derivative computation).
-def int_amdgcn_ps_live : Intrinsic <
-  [llvm_i1_ty],
-  [],
-  [IntrNoMem]>;
+def int_amdgcn_ps_live : Intrinsic <[llvm_i1_ty], [], []>;
 
 def int_amdgcn_mbcnt_lo :
   GCCBuiltin<"__builtin_amdgcn_mbcnt_lo">,
@@ -1494,6 +1492,9 @@ def int_amdgcn_wqm_vote : Intrinsic<[llvm_i1_ty],
 // If false, set EXEC=0 for the current thread until the end of program.
 def int_amdgcn_kill : Intrinsic<[], [llvm_i1_ty], []>;
 
+// If false, mark all active lanes as helper lanes until the end of program.
+def int_amdgcn_wqm_demote : Intrinsic<[], [llvm_i1_ty], []>;
+
 // Copies the active channels of the source value to the destination value,
 // with the guarantee that the source value is computed as if the entire
 // program were executed in Whole Wavefront Mode, i.e. with all channels
@@ -1512,6 +1513,18 @@ def int_amdgcn_set_inactive :
             [LLVMMatchType<0>, // value to be copied
              LLVMMatchType<0>], // value for the inactive lanes to take
             [IntrNoMem, IntrConvergent]>;
+
+// Return if the given flat pointer points to a local memory address.
+def int_amdgcn_is_shared : GCCBuiltin<"__builtin_amdgcn_is_shared">,
+  Intrinsic<[llvm_i1_ty], [llvm_ptr_ty],
+  [IntrNoMem, IntrSpeculatable, NoCapture<0>]
+>;
+
+// Return if the given flat pointer points to a prvate memory address.
+def int_amdgcn_is_private : GCCBuiltin<"__builtin_amdgcn_is_private">,
+  Intrinsic<[llvm_i1_ty], [llvm_ptr_ty],
+  [IntrNoMem, IntrSpeculatable, NoCapture<0>]
+>;
 
 // Waterfall intrinics used to tag a region as requiring waterfall loops to
 // transform VGPR values into SGPR values in a loop

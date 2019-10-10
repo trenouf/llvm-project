@@ -3,8 +3,6 @@
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-// Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
-// Notified per clause 4(b) of the license.
 //
 //===----------------------------------------------------------------------===//
 //
@@ -846,9 +844,7 @@ public:
 
   /// Legalize operands in \p MI by either commuting it or inserting a
   /// copy of src1.
-  void legalizeOperandsVOP2(MachineRegisterInfo &MRI,
-                            MachineInstr &MI,
-                            SetVectorType &Worklist) const;
+  void legalizeOperandsVOP2(MachineRegisterInfo &MRI, MachineInstr &MI) const;
 
   /// Fix operands in \p MI to satisfy constant bus requirements.
   void legalizeOperandsVOP3(MachineRegisterInfo &MRI, MachineInstr &MI) const;
@@ -872,7 +868,6 @@ public:
   /// instructions and control-flow around \p MI.  If present, \p MDT is
   /// updated.
   void legalizeOperands(MachineInstr &MI,
-                        SetVectorType &Worklist,
                         MachineDominatorTree *MDT = nullptr) const;
 
   /// Replace this instruction's opcode with the equivalent VALU
@@ -959,6 +954,17 @@ public:
 
   bool isBasicBlockPrologue(const MachineInstr &MI) const override;
 
+  MachineInstr *createPHIDestinationCopy(MachineBasicBlock &MBB,
+                                         MachineBasicBlock::iterator InsPt,
+                                         const DebugLoc &DL, Register Src,
+                                         Register Dst) const override;
+
+  MachineInstr *createPHISourceCopy(MachineBasicBlock &MBB,
+                                    MachineBasicBlock::iterator InsPt,
+                                    const DebugLoc &DL, Register Src,
+                                    Register SrcSubReg,
+                                    Register Dst) const override;
+
   /// Return a partially built integer add instruction without carry.
   /// Caller must add source operands.
   /// For pre-GFX9 it will generate unused carry destination operand.
@@ -967,6 +973,12 @@ public:
                                     MachineBasicBlock::iterator I,
                                     const DebugLoc &DL,
                                     unsigned DestReg) const;
+
+  MachineInstrBuilder getAddNoCarry(MachineBasicBlock &MBB,
+                                    MachineBasicBlock::iterator I,
+                                    const DebugLoc &DL,
+                                    Register DestReg,
+                                    RegScavenger &RS) const;
 
   static bool isKillTerminator(unsigned Opcode);
   const MCInstrDesc &getKillTerminatorFromPseudo(unsigned Opcode) const;

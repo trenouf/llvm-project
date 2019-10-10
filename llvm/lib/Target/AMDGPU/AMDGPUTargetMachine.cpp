@@ -242,16 +242,17 @@ extern "C" void LLVMInitializeAMDGPUTarget() {
   initializeAMDGPUUseNativeCallsPass(*PR);
   initializeAMDGPUSimplifyLibCallsPass(*PR);
   initializeAMDGPUInlinerPass(*PR);
+  initializeAMDGPUPrintfRuntimeBindingPass(*PR);
   initializeGCNRegBankReassignPass(*PR);
   initializeGCNNSAReassignPass(*PR);
 }
 
 static std::unique_ptr<TargetLoweringObjectFile> createTLOF(const Triple &TT) {
-  return llvm::make_unique<AMDGPUTargetObjectFile>();
+  return std::make_unique<AMDGPUTargetObjectFile>();
 }
 
 static ScheduleDAGInstrs *createR600MachineScheduler(MachineSchedContext *C) {
-  return new ScheduleDAGMILive(C, llvm::make_unique<R600SchedStrategy>());
+  return new ScheduleDAGMILive(C, std::make_unique<R600SchedStrategy>());
 }
 
 static ScheduleDAGInstrs *createSIMachineScheduler(MachineSchedContext *C) {
@@ -261,7 +262,7 @@ static ScheduleDAGInstrs *createSIMachineScheduler(MachineSchedContext *C) {
 static ScheduleDAGInstrs *
 createGCNMaxOccupancyMachineScheduler(MachineSchedContext *C) {
   ScheduleDAGMILive *DAG =
-    new GCNScheduleDAGMILive(C, make_unique<GCNMaxOccupancySchedStrategy>(C));
+    new GCNScheduleDAGMILive(C, std::make_unique<GCNMaxOccupancySchedStrategy>(C));
   DAG->addMutation(createLoadClusterDAGMutation(DAG->TII, DAG->TRI));
   DAG->addMutation(createStoreClusterDAGMutation(DAG->TII, DAG->TRI));
   DAG->addMutation(createAMDGPUMacroFusionDAGMutation());
@@ -416,6 +417,7 @@ void AMDGPUTargetMachine::adjustPassManager(PassManagerBuilder &Builder) {
         PM.add(createAMDGPUExternalAAWrapperPass());
       }
       PM.add(createAMDGPUUnifyMetadataPass());
+      PM.add(createAMDGPUPrintfRuntimeBinding());
       PM.add(createAMDGPUPropagateAttributesLatePass(this));
       if (Internalize) {
         PM.add(createInternalizePass(mustPreserveGV));
@@ -486,7 +488,7 @@ const R600Subtarget *R600TargetMachine::getSubtargetImpl(
     // creation will depend on the TM and the code generation flags on the
     // function that reside in TargetOptions.
     resetTargetOptions(F);
-    I = llvm::make_unique<R600Subtarget>(TargetTriple, GPU, FS, *this);
+    I = std::make_unique<R600Subtarget>(TargetTriple, GPU, FS, *this);
   }
 
   return I.get();
@@ -522,7 +524,7 @@ const GCNSubtarget *GCNTargetMachine::getSubtargetImpl(const Function &F) const 
     // creation will depend on the TM and the code generation flags on the
     // function that reside in TargetOptions.
     resetTargetOptions(F);
-    I = llvm::make_unique<GCNSubtarget>(TargetTriple, GPU, FS, *this);
+    I = std::make_unique<GCNSubtarget>(TargetTriple, GPU, FS, *this);
   }
 
   I->setScalarizeGlobalBehavior(ScalarizeGlobal);
@@ -663,6 +665,8 @@ void AMDGPUPassConfig::addIRPasses() {
   disablePass(&FuncletLayoutID);
   disablePass(&PatchableFunctionID);
 
+  addPass(createAMDGPUPrintfRuntimeBinding());
+
   // This must occur before inlining, as the inliner will not look through
   // bitcast calls.
   addPass(createAMDGPUFixFunctionBitcastsPass());
@@ -684,12 +688,6 @@ void AMDGPUPassConfig::addIRPasses() {
   // functions, then we will generate code for the first function
   // without ever running any passes on the second.
   addPass(createBarrierNoopPass());
-
-  if (TM.getTargetTriple().getArch() == Triple::amdgcn) {
-    // TODO: May want to move later or split into an early and late one.
-
-    addPass(createAMDGPUCodeGenPreparePass());
-  }
 
   // Handle uses of OpenCL image2d_t, image3d_t and sampler_t arguments.
   if (TM.getTargetTriple().getArch() == Triple::r600)
@@ -716,6 +714,11 @@ void AMDGPUPassConfig::addIRPasses() {
           AAR.addAAResult(WrapperPass->getResult());
         }));
     }
+  }
+
+  if (TM.getTargetTriple().getArch() == Triple::amdgcn) {
+    // TODO: May want to move later or split into an early and late one.
+    addPass(createAMDGPUCodeGenPreparePass());
   }
 
   TargetPassConfig::addIRPasses();

@@ -90,7 +90,6 @@ enum SpillOpcodeKey {
   SOK_QuadBitSpill,
   SOK_SpillToVSR,
   SOK_SPESpill,
-  SOK_SPE4Spill,
   SOK_LastOpcodeSpill  // This must be last on the enum.
 };
 
@@ -184,7 +183,7 @@ int PPCInstrInfo::getOperandLatency(const InstrItineraryData *ItinData,
     return Latency;
 
   const MachineOperand &DefMO = DefMI.getOperand(DefIdx);
-  unsigned Reg = DefMO.getReg();
+  Register Reg = DefMO.getReg();
 
   bool IsRegCR;
   if (Register::isVirtualRegister(Reg)) {
@@ -335,6 +334,7 @@ bool PPCInstrInfo::isReallyTriviallyReMaterializable(const MachineInstr &MI,
   case PPC::XXLXORz:
   case PPC::XXLXORspz:
   case PPC::XXLXORdpz:
+  case PPC::XXLEQVOnes:
   case PPC::V_SET0B:
   case PPC::V_SET0H:
   case PPC::V_SET0:
@@ -966,11 +966,11 @@ void PPCInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
     getKillRegState(KillSrc);
     return;
   } else if (PPC::SPERCRegClass.contains(SrcReg) &&
-             PPC::SPE4RCRegClass.contains(DestReg)) {
+             PPC::GPRCRegClass.contains(DestReg)) {
     BuildMI(MBB, I, DL, get(PPC::EFSCFD), DestReg).addReg(SrcReg);
     getKillRegState(KillSrc);
     return;
-  } else if (PPC::SPE4RCRegClass.contains(SrcReg) &&
+  } else if (PPC::GPRCRegClass.contains(SrcReg) &&
              PPC::SPERCRegClass.contains(DestReg)) {
     BuildMI(MBB, I, DL, get(PPC::EFDCFS), DestReg).addReg(SrcReg);
     getKillRegState(KillSrc);
@@ -1009,8 +1009,6 @@ void PPCInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
     Opc = PPC::QVFMRb;
   else if (PPC::CRBITRCRegClass.contains(DestReg, SrcReg))
     Opc = PPC::CROR;
-  else if (PPC::SPE4RCRegClass.contains(DestReg, SrcReg))
-    Opc = PPC::OR;
   else if (PPC::SPERCRegClass.contains(DestReg, SrcReg))
     Opc = PPC::EVOR;
   else
@@ -1043,8 +1041,6 @@ unsigned PPCInstrInfo::getStoreOpcodeForSpill(unsigned Reg,
       OpcodeIndex = SOK_Float4Spill;
     } else if (PPC::SPERCRegClass.hasSubClassEq(RC)) {
       OpcodeIndex = SOK_SPESpill;
-    } else if (PPC::SPE4RCRegClass.hasSubClassEq(RC)) {
-      OpcodeIndex = SOK_SPE4Spill;
     } else if (PPC::CRRCRegClass.hasSubClassEq(RC)) {
       OpcodeIndex = SOK_CRSpill;
     } else if (PPC::CRBITRCRegClass.hasSubClassEq(RC)) {
@@ -1083,8 +1079,6 @@ unsigned PPCInstrInfo::getStoreOpcodeForSpill(unsigned Reg,
       OpcodeIndex = SOK_Float4Spill;
     } else if (PPC::SPERCRegClass.contains(Reg)) {
       OpcodeIndex = SOK_SPESpill;
-    } else if (PPC::SPE4RCRegClass.contains(Reg)) {
-      OpcodeIndex = SOK_SPE4Spill;
     } else if (PPC::CRRCRegClass.contains(Reg)) {
       OpcodeIndex = SOK_CRSpill;
     } else if (PPC::CRBITRCRegClass.contains(Reg)) {
@@ -1133,8 +1127,6 @@ PPCInstrInfo::getLoadOpcodeForSpill(unsigned Reg,
       OpcodeIndex = SOK_Float4Spill;
     } else if (PPC::SPERCRegClass.hasSubClassEq(RC)) {
       OpcodeIndex = SOK_SPESpill;
-    } else if (PPC::SPE4RCRegClass.hasSubClassEq(RC)) {
-      OpcodeIndex = SOK_SPE4Spill;
     } else if (PPC::CRRCRegClass.hasSubClassEq(RC)) {
       OpcodeIndex = SOK_CRSpill;
     } else if (PPC::CRBITRCRegClass.hasSubClassEq(RC)) {
@@ -1173,8 +1165,6 @@ PPCInstrInfo::getLoadOpcodeForSpill(unsigned Reg,
       OpcodeIndex = SOK_Float4Spill;
     } else if (PPC::SPERCRegClass.contains(Reg)) {
       OpcodeIndex = SOK_SPESpill;
-    } else if (PPC::SPE4RCRegClass.contains(Reg)) {
-      OpcodeIndex = SOK_SPE4Spill;
     } else if (PPC::CRRCRegClass.contains(Reg)) {
       OpcodeIndex = SOK_CRSpill;
     } else if (PPC::CRBITRCRegClass.contains(Reg)) {
@@ -1648,7 +1638,7 @@ bool PPCInstrInfo::optimizeCompareInstr(MachineInstr &CmpInstr, unsigned SrcReg,
     return false;
 
   int OpC = CmpInstr.getOpcode();
-  unsigned CRReg = CmpInstr.getOperand(0).getReg();
+  Register CRReg = CmpInstr.getOperand(0).getReg();
 
   // FP record forms set CR1 based on the exception status bits, not a
   // comparison with zero.
@@ -1937,7 +1927,7 @@ bool PPCInstrInfo::optimizeCompareInstr(MachineInstr &CmpInstr, unsigned SrcReg,
     // Rotates are expensive instructions. If we're emitting a record-form
     // rotate that can just be an andi/andis, we should just emit that.
     if (MIOpC == PPC::RLWINM || MIOpC == PPC::RLWINM8) {
-      unsigned GPRRes = MI->getOperand(0).getReg();
+      Register GPRRes = MI->getOperand(0).getReg();
       int64_t SH = MI->getOperand(2).getImm();
       int64_t MB = MI->getOperand(3).getImm();
       int64_t ME = MI->getOperand(4).getImm();
@@ -2122,7 +2112,7 @@ bool PPCInstrInfo::expandVSXMemPseudo(MachineInstr &MI) const {
       llvm_unreachable("Unknown Operation!");
     }
 
-    unsigned TargetReg = MI.getOperand(0).getReg();
+    Register TargetReg = MI.getOperand(0).getReg();
     unsigned Opcode;
     if ((TargetReg >= PPC::F0 && TargetReg <= PPC::F31) ||
         (TargetReg >= PPC::VSL0 && TargetReg <= PPC::VSL31))
@@ -2184,7 +2174,7 @@ bool PPCInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
     return expandVSXMemPseudo(MI);
   }
   case PPC::SPILLTOVSR_LD: {
-    unsigned TargetReg = MI.getOperand(0).getReg();
+    Register TargetReg = MI.getOperand(0).getReg();
     if (PPC::VSFRCRegClass.contains(TargetReg)) {
       MI.setDesc(get(PPC::DFLOADf64));
       return expandPostRAPseudo(MI);
@@ -2194,7 +2184,7 @@ bool PPCInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
     return true;
   }
   case PPC::SPILLTOVSR_ST: {
-    unsigned SrcReg = MI.getOperand(0).getReg();
+    Register SrcReg = MI.getOperand(0).getReg();
     if (PPC::VSFRCRegClass.contains(SrcReg)) {
       NumStoreSPILLVSRRCAsVec++;
       MI.setDesc(get(PPC::DFSTOREf64));
@@ -2206,7 +2196,7 @@ bool PPCInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
     return true;
   }
   case PPC::SPILLTOVSR_LDX: {
-    unsigned TargetReg = MI.getOperand(0).getReg();
+    Register TargetReg = MI.getOperand(0).getReg();
     if (PPC::VSFRCRegClass.contains(TargetReg))
       MI.setDesc(get(PPC::LXSDX));
     else
@@ -2214,7 +2204,7 @@ bool PPCInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
     return true;
   }
   case PPC::SPILLTOVSR_STX: {
-    unsigned SrcReg = MI.getOperand(0).getReg();
+    Register SrcReg = MI.getOperand(0).getReg();
     if (PPC::VSFRCRegClass.contains(SrcReg)) {
       NumStoreSPILLVSRRCAsVec++;
       MI.setDesc(get(PPC::STXSDX));
@@ -2279,7 +2269,7 @@ void PPCInstrInfo::replaceInstrOperandWithImm(MachineInstr &MI,
                                               int64_t Imm) const {
   assert(MI.getOperand(OpNo).isReg() && "Operand must be a REG");
   // Replace the REG with the Immediate.
-  unsigned InUseReg = MI.getOperand(OpNo).getReg();
+  Register InUseReg = MI.getOperand(OpNo).getReg();
   MI.getOperand(OpNo).ChangeToImmediate(Imm);
 
   if (empty(MI.implicit_operands()))
@@ -2359,7 +2349,7 @@ MachineInstr *PPCInstrInfo::getForwardingDefMI(
     for (int i = 1, e = MI.getNumOperands(); i < e; i++) {
       if (!MI.getOperand(i).isReg())
         continue;
-      unsigned Reg = MI.getOperand(i).getReg();
+      Register Reg = MI.getOperand(i).getReg();
       if (!Register::isVirtualRegister(Reg))
         continue;
       unsigned TrueReg = TRI->lookThruCopyLike(Reg, MRI);
@@ -2401,7 +2391,7 @@ MachineInstr *PPCInstrInfo::getForwardingDefMI(
       MachineOperand &MO = MI.getOperand(i);
       SeenIntermediateUse = false;
       if (MO.isReg() && MO.isUse() && !MO.isImplicit()) {
-        unsigned Reg = MI.getOperand(i).getReg();
+        Register Reg = MI.getOperand(i).getReg();
         // If we see another use of this reg between the def and the MI,
         // we want to flat it so the def isn't deleted.
         MachineInstr *DefMI = getDefMIPostRA(Reg, MI, SeenIntermediateUse);
@@ -2432,7 +2422,7 @@ const unsigned *PPCInstrInfo::getStoreOpcodesForSpillArray() const {
       {PPC::STW, PPC::STD, PPC::STFD, PPC::STFS, PPC::SPILL_CR,
        PPC::SPILL_CRBIT, PPC::STVX, PPC::STXVD2X, PPC::STXSDX, PPC::STXSSPX,
        PPC::SPILL_VRSAVE, PPC::QVSTFDX, PPC::QVSTFSXs, PPC::QVSTFDXb,
-       PPC::SPILLTOVSR_ST, PPC::EVSTDD, PPC::SPESTW},
+       PPC::SPILLTOVSR_ST, PPC::EVSTDD},
       // Power 9
       {PPC::STW, PPC::STD, PPC::STFD, PPC::STFS, PPC::SPILL_CR,
        PPC::SPILL_CRBIT, PPC::STVX, PPC::STXV, PPC::DFSTOREf64, PPC::DFSTOREf32,
@@ -2448,7 +2438,7 @@ const unsigned *PPCInstrInfo::getLoadOpcodesForSpillArray() const {
       {PPC::LWZ, PPC::LD, PPC::LFD, PPC::LFS, PPC::RESTORE_CR,
        PPC::RESTORE_CRBIT, PPC::LVX, PPC::LXVD2X, PPC::LXSDX, PPC::LXSSPX,
        PPC::RESTORE_VRSAVE, PPC::QVLFDX, PPC::QVLFSXs, PPC::QVLFDXb,
-       PPC::SPILLTOVSR_LD, PPC::EVLDD, PPC::SPELWZ},
+       PPC::SPILLTOVSR_LD, PPC::EVLDD},
       // Power 9
       {PPC::LWZ, PPC::LD, PPC::LFD, PPC::LFS, PPC::RESTORE_CR,
        PPC::RESTORE_CRBIT, PPC::LVX, PPC::LXV, PPC::DFLOADf64, PPC::DFLOADf32,
@@ -2553,7 +2543,7 @@ bool PPCInstrInfo::convertToImmediateForm(MachineInstr &MI,
          "The forwarding operand needs to be valid at this point");
   bool IsForwardingOperandKilled = MI.getOperand(ForwardingOperand).isKill();
   bool KillFwdDefMI = !SeenIntermediateUse && IsForwardingOperandKilled;
-  unsigned ForwardingOperandReg = MI.getOperand(ForwardingOperand).getReg();
+  Register ForwardingOperandReg = MI.getOperand(ForwardingOperand).getReg();
   if (KilledDef && KillFwdDefMI)
     *KilledDef = DefMI;
 
@@ -2609,7 +2599,7 @@ bool PPCInstrInfo::convertToImmediateForm(MachineInstr &MI,
     // If a compare-immediate is fed by an immediate and is itself an input of
     // an ISEL (the most common case) into a COPY of the correct register.
     bool Changed = false;
-    unsigned DefReg = MI.getOperand(0).getReg();
+    Register DefReg = MI.getOperand(0).getReg();
     int64_t Comparand = MI.getOperand(2).getImm();
     int64_t SExtComparand = ((uint64_t)Comparand & ~0x7FFFuLL) != 0 ?
       (Comparand | 0xFFFFFFFFFFFF0000) : Comparand;
@@ -2619,8 +2609,8 @@ bool PPCInstrInfo::convertToImmediateForm(MachineInstr &MI,
       if (UseOpc != PPC::ISEL && UseOpc != PPC::ISEL8)
         continue;
       unsigned CRSubReg = CompareUseMI.getOperand(3).getSubReg();
-      unsigned TrueReg = CompareUseMI.getOperand(1).getReg();
-      unsigned FalseReg = CompareUseMI.getOperand(2).getReg();
+      Register TrueReg = CompareUseMI.getOperand(1).getReg();
+      Register FalseReg = CompareUseMI.getOperand(2).getReg();
       unsigned RegToCopy = selectReg(SExtImm, SExtComparand, Opc, TrueReg,
                                      FalseReg, CRSubReg);
       if (RegToCopy == PPC::NoRegister)
@@ -3304,7 +3294,7 @@ bool PPCInstrInfo::isRegElgibleForForwarding(
   if (MRI.isSSA())
     return false;
 
-  unsigned Reg = RegMO.getReg();
+  Register Reg = RegMO.getReg();
 
   // Walking the inst in reverse(MI-->DefMI) to get the last DEF of the Reg.
   MachineBasicBlock::const_reverse_iterator It = MI;
@@ -3528,8 +3518,8 @@ bool PPCInstrInfo::transformToImmFormFedByLI(MachineInstr &MI,
   if (PostRA && III.ZeroIsSpecialOrig != III.ZeroIsSpecialNew) {
     unsigned PosForOrigZero = III.ZeroIsSpecialOrig ? III.ZeroIsSpecialOrig :
       III.ZeroIsSpecialNew + 1;
-    unsigned OrigZeroReg = MI.getOperand(PosForOrigZero).getReg();
-    unsigned NewZeroReg = MI.getOperand(III.ZeroIsSpecialNew).getReg();
+    Register OrigZeroReg = MI.getOperand(PosForOrigZero).getReg();
+    Register NewZeroReg = MI.getOperand(III.ZeroIsSpecialNew).getReg();
     // If R0 is in the operand where zero is special for the new instruction,
     // it is unsafe to transform if the constant operand isn't that operand.
     if ((NewZeroReg == PPC::R0 || NewZeroReg == PPC::X0) &&
@@ -3618,7 +3608,7 @@ bool PPCInstrInfo::transformToImmFormFedByLI(MachineInstr &MI,
     if (III.ZeroIsSpecialNew) {
       // If operand at III.ZeroIsSpecialNew is physical reg(eg: ZERO/ZERO8), no
       // need to fix up register class.
-      unsigned RegToModify = MI.getOperand(III.ZeroIsSpecialNew).getReg();
+      Register RegToModify = MI.getOperand(III.ZeroIsSpecialNew).getReg();
       if (Register::isVirtualRegister(RegToModify)) {
         const TargetRegisterClass *NewRC =
           MRI.getRegClass(RegToModify)->hasSuperClassEq(&PPC::GPRCRegClass) ?
@@ -3764,7 +3754,7 @@ bool PPCInstrInfo::isTOCSaveMI(const MachineInstr &MI) const {
     return false;
   unsigned TOCSaveOffset = Subtarget.getFrameLowering()->getTOCSaveOffset();
   unsigned StackOffset = MI.getOperand(1).getImm();
-  unsigned StackReg = MI.getOperand(2).getReg();
+  Register StackReg = MI.getOperand(2).getReg();
   if (StackReg == PPC::X1 && StackOffset == TOCSaveOffset)
     return true;
 
@@ -3789,7 +3779,7 @@ PPCInstrInfo::isSignOrZeroExtended(const MachineInstr &MI, bool SignExt,
 
   switch (MI.getOpcode()) {
   case PPC::COPY: {
-    unsigned SrcReg = MI.getOperand(1).getReg();
+    Register SrcReg = MI.getOperand(1).getReg();
 
     // In both ELFv1 and v2 ABI, method parameters and the return value
     // are sign- or zero-extended.
@@ -3798,7 +3788,7 @@ PPCInstrInfo::isSignOrZeroExtended(const MachineInstr &MI, bool SignExt,
       // We check the ZExt/SExt flags for a method parameter.
       if (MI.getParent()->getBasicBlock() ==
           &MF->getFunction().getEntryBlock()) {
-        unsigned VReg = MI.getOperand(0).getReg();
+        Register VReg = MI.getOperand(0).getReg();
         if (MF->getRegInfo().isLiveIn(VReg))
           return SignExt ? FuncInfo->isLiveInSExt(VReg) :
                            FuncInfo->isLiveInZExt(VReg);
@@ -3858,7 +3848,7 @@ PPCInstrInfo::isSignOrZeroExtended(const MachineInstr &MI, bool SignExt,
   case PPC::XORIS8: {
     // logical operation with 16-bit immediate does not change the upper bits.
     // So, we track the operand register as we do for register copy.
-    unsigned SrcReg = MI.getOperand(1).getReg();
+    Register SrcReg = MI.getOperand(1).getReg();
     if (!Register::isVirtualRegister(SrcReg))
       return false;
     const MachineInstr *SrcMI = MRI->getVRegDef(SrcReg);
@@ -3887,7 +3877,7 @@ PPCInstrInfo::isSignOrZeroExtended(const MachineInstr &MI, bool SignExt,
 
     for (unsigned I = 1; I != E; I += D) {
       if (MI.getOperand(I).isReg()) {
-        unsigned SrcReg = MI.getOperand(I).getReg();
+        Register SrcReg = MI.getOperand(I).getReg();
         if (!Register::isVirtualRegister(SrcReg))
           return false;
         const MachineInstr *SrcMI = MRI->getVRegDef(SrcReg);
@@ -3910,8 +3900,8 @@ PPCInstrInfo::isSignOrZeroExtended(const MachineInstr &MI, bool SignExt,
 
     assert(MI.getOperand(1).isReg() && MI.getOperand(2).isReg());
 
-    unsigned SrcReg1 = MI.getOperand(1).getReg();
-    unsigned SrcReg2 = MI.getOperand(2).getReg();
+    Register SrcReg1 = MI.getOperand(1).getReg();
+    Register SrcReg2 = MI.getOperand(2).getReg();
 
     if (!Register::isVirtualRegister(SrcReg1) ||
         !Register::isVirtualRegister(SrcReg2))
@@ -3978,7 +3968,7 @@ unsigned PPCInstrInfo::reduceLoopCount(
   MachineInstr *Loop = findLoopInstr(PreHeader);
   if (!Loop)
     return 0;
-  unsigned LoopCountReg = Loop->getOperand(0).getReg();
+  Register LoopCountReg = Loop->getOperand(0).getReg();
   MachineRegisterInfo &MRI = MF->getRegInfo();
   MachineInstr *LoopCount = MRI.getUniqueVRegDef(LoopCountReg);
 

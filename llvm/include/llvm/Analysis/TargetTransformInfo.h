@@ -368,6 +368,20 @@ public:
   /// optimize away.
   unsigned getFlatAddressSpace() const;
 
+  /// Return any intrinsic address operand indexes which may be rewritten if
+  /// they use a flat address space pointer.
+  ///
+  /// \returns true if the intrinsic was handled.
+  bool collectFlatAddressOperands(SmallVectorImpl<int> &OpIndexes,
+                                  Intrinsic::ID IID) const;
+
+  /// Rewrite intrinsic call \p II such that \p OldV will be replaced with \p
+  /// NewV, which has a different address space. This should happen for every
+  /// operand index that collectFlatAddressOperands returned for the intrinsic.
+  /// \returns true if the intrinsic /// was handled.
+  bool rewriteIntrinsicWithAddressSpace(IntrinsicInst *II,
+                                        Value *OldV, Value *NewV) const;
+
   /// Test whether calls to a function lower to actual program function
   /// calls.
   ///
@@ -566,9 +580,9 @@ public:
   bool isLegalMaskedLoad(Type *DataType) const;
 
   /// Return true if the target supports nontemporal store.
-  bool isLegalNTStore(Type *DataType, unsigned Alignment) const;
+  bool isLegalNTStore(Type *DataType, llvm::Align Alignment) const;
   /// Return true if the target supports nontemporal load.
-  bool isLegalNTLoad(Type *DataType, unsigned Alignment) const;
+  bool isLegalNTLoad(Type *DataType, llvm::Align Alignment) const;
 
   /// Return true if the target supports masked scatter.
   bool isLegalMaskedScatter(Type *DataType) const;
@@ -1160,6 +1174,10 @@ public:
   virtual bool isSourceOfDivergence(const Value *V) = 0;
   virtual bool isAlwaysUniform(const Value *V) = 0;
   virtual unsigned getFlatAddressSpace() = 0;
+  virtual bool collectFlatAddressOperands(SmallVectorImpl<int> &OpIndexes,
+                                          Intrinsic::ID IID) const = 0;
+  virtual bool rewriteIntrinsicWithAddressSpace(
+    IntrinsicInst *II, Value *OldV, Value *NewV) const = 0;
   virtual bool isLoweredToCall(const Function *F) = 0;
   virtual void getUnrollingPreferences(Loop *L, ScalarEvolution &,
                                        UnrollingPreferences &UP) = 0;
@@ -1184,8 +1202,8 @@ public:
   virtual bool shouldFavorBackedgeIndex(const Loop *L) const = 0;
   virtual bool isLegalMaskedStore(Type *DataType) = 0;
   virtual bool isLegalMaskedLoad(Type *DataType) = 0;
-  virtual bool isLegalNTStore(Type *DataType, unsigned Alignment) = 0;
-  virtual bool isLegalNTLoad(Type *DataType, unsigned Alignment) = 0;
+  virtual bool isLegalNTStore(Type *DataType, llvm::Align Alignment) = 0;
+  virtual bool isLegalNTLoad(Type *DataType, llvm::Align Alignment) = 0;
   virtual bool isLegalMaskedScatter(Type *DataType) = 0;
   virtual bool isLegalMaskedGather(Type *DataType) = 0;
   virtual bool isLegalMaskedCompressStore(Type *DataType) = 0;
@@ -1400,6 +1418,16 @@ public:
     return Impl.getFlatAddressSpace();
   }
 
+  bool collectFlatAddressOperands(SmallVectorImpl<int> &OpIndexes,
+                                  Intrinsic::ID IID) const override {
+    return Impl.collectFlatAddressOperands(OpIndexes, IID);
+  }
+
+  bool rewriteIntrinsicWithAddressSpace(
+    IntrinsicInst *II, Value *OldV, Value *NewV) const override {
+    return Impl.rewriteIntrinsicWithAddressSpace(II, OldV, NewV);
+  }
+
   bool isLoweredToCall(const Function *F) override {
     return Impl.isLoweredToCall(F);
   }
@@ -1451,10 +1479,10 @@ public:
   bool isLegalMaskedLoad(Type *DataType) override {
     return Impl.isLegalMaskedLoad(DataType);
   }
-  bool isLegalNTStore(Type *DataType, unsigned Alignment) override {
+  bool isLegalNTStore(Type *DataType, llvm::Align Alignment) override {
     return Impl.isLegalNTStore(DataType, Alignment);
   }
-  bool isLegalNTLoad(Type *DataType, unsigned Alignment) override {
+  bool isLegalNTLoad(Type *DataType, llvm::Align Alignment) override {
     return Impl.isLegalNTLoad(DataType, Alignment);
   }
   bool isLegalMaskedScatter(Type *DataType) override {

@@ -3245,6 +3245,17 @@ match what was already there. However, a store *to* an undefined
 location could clobber arbitrary memory, therefore, it has undefined
 behavior.
 
+**MemorySanitizer**, a detector of uses of uninitialized memory,
+defines a branch with condition that depends on an undef value (or
+certain other values, like e.g. a result of a load from heap-allocated
+memory that has never been stored to) to have an externally visible
+side effect. For this reason functions with *sanitize_memory*
+attribute are not allowed to produce such branches "out of thin
+air". More strictly, an optimization that inserts a conditional branch
+is only valid if in all executions where the branch condition has at
+least one undefined bit, the same branch condition is evaluated in the
+input IR as well.
+
 .. _poisonvalues:
 
 Poison Values
@@ -3811,8 +3822,9 @@ AArch64:
   offsets). (However, LLVM currently does this for the ``m`` constraint as
   well.)
 - ``r``: A 32 or 64-bit integer register (W* or X*).
-- ``w``: A 32, 64, or 128-bit floating-point/SIMD register.
-- ``x``: A lower 128-bit floating-point/SIMD register (``V0`` to ``V15``).
+- ``w``: A 32, 64, or 128-bit floating-point, SIMD or SVE vector register.
+- ``x``: Like w, but restricted to registers 0 to 15 inclusive.
+- ``y``: Like w, but restricted to SVE vector registers Z0 to Z7 inclusive.
 
 AMDGPU:
 
@@ -3951,6 +3963,17 @@ PowerPC:
   register set (overlapping both the floating-point and vector register files).
 - ``ws``: A 32 or 64-bit floating-point register, from the full VSX register
   set.
+
+RISC-V:
+
+- ``A``: An address operand (using a general-purpose register, without an
+  offset).
+- ``I``: A 12-bit signed integer immediate operand.
+- ``J``: A zero integer immediate operand.
+- ``K``: A 5-bit unsigned integer immediate operand.
+- ``f``: A 32- or 64-bit floating-point register (requires F or D extension).
+- ``r``: A 32- or 64-bit general-purpose register (depending on the platform
+  ``XLEN``).
 
 Sparc:
 
@@ -4823,6 +4846,11 @@ after the function prologue. The language frontend is expected to compute
 this property for each DILocalVariable. The flag should be used
 only in optimized code.
 
+The `ExportSymbols` flag marks a class, struct or union whose members
+may be referenced as if they were defined in the containing class or
+union. This flag is used to decide whether the DW_AT_export_symbols can
+be used for the structure type.
+
 DIObjCProperty
 """"""""""""""
 
@@ -5370,7 +5398,7 @@ suggests an unroll factor to the loop unroller:
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 This metadata disables all optional loop transformations unless
-explicitly instructed using other transformation metdata such as
+explicitly instructed using other transformation metadata such as
 ``llvm.loop.unroll.enable``. That is, no heuristic will try to determine
 whether a transformation is profitable. The purpose is to avoid that the
 loop is transformed to a different loop before an explicitly requested
@@ -5709,9 +5737,23 @@ the non-distributed fallback version will have. See
 '``llvm.loop.distribute.followup_all``' Metadata
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Thes attributes in this metdata is added to all followup loops of the
+The attributes in this metadata is added to all followup loops of the
 loop distribution pass. See
 :ref:`Transformation Metadata <transformation-metadata>` for details.
+
+'``llvm.licm.disable``' Metadata
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+This metadata indicates that loop-invariant code motion (LICM) should not be
+performed on this loop. The metadata has a single operand which is the string
+``llvm.licm.disable``. For example:
+
+.. code-block:: llvm
+
+   !0 = !{!"llvm.licm.disable"}
+
+Note that although it operates per loop it isn't given the llvm.loop prefix
+as it is not affected by the ``llvm.loop.disable_nonforced`` metadata.
 
 '``llvm.access.group``' Metadata
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -6925,7 +6967,7 @@ Syntax:
 
 ::
 
-      <result> = invoke [cconv] [ret attrs] [addrspace(<num>)] [<ty>|<fnty> <fnptrval>(<function args>) [fn attrs]
+      <result> = invoke [cconv] [ret attrs] [addrspace(<num>)] <ty>|<fnty> <fnptrval>(<function args>) [fn attrs]
                     [operand bundles] to label <normal label> unwind label <exception label>
 
 Overview:
@@ -7025,7 +7067,7 @@ Syntax:
 
 ::
 
-      <result> = callbr [cconv] [ret attrs] [addrspace(<num>)] [<ty>|<fnty> <fnptrval>(<function args>) [fn attrs]
+      <result> = callbr [cconv] [ret attrs] [addrspace(<num>)] <ty>|<fnty> <fnptrval>(<function args>) [fn attrs]
                     [operand bundles] to label <normal label> or jump [other labels]
 
 Overview:
@@ -10130,7 +10172,7 @@ Syntax:
 ::
 
       <result> = [tail | musttail | notail ] call [fast-math flags] [cconv] [ret attrs] [addrspace(<num>)]
-                 [<ty>|<fnty> <fnptrval>(<function args>) [fn attrs] [ operand bundles ]
+                 <ty>|<fnty> <fnptrval>(<function args>) [fn attrs] [ operand bundles ]
 
 Overview:
 """""""""
@@ -12031,6 +12073,8 @@ trapping or setting ``errno``.
 When specified with the fast-math-flag 'afn', the result may be approximated
 using a less accurate calculation.
 
+.. _int_fma:
+
 '``llvm.fma.*``' Intrinsic
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -13724,13 +13768,80 @@ Examples
 
       ; Saturation
       %res = call i4 @llvm.smul.fix.sat.i4(i4 7, i4 2, i32 0)  ; %res = 7
-      %res = call i4 @llvm.smul.fix.sat.i4(i4 7, i4 2, i32 2)  ; %res = 7
-      %res = call i4 @llvm.smul.fix.sat.i4(i4 -8, i4 2, i32 2)  ; %res = -8
-      %res = call i4 @llvm.smul.fix.sat.i4(i4 -8, i4 -2, i32 2)  ; %res = 7
+      %res = call i4 @llvm.smul.fix.sat.i4(i4 7, i4 4, i32 2)  ; %res = 7
+      %res = call i4 @llvm.smul.fix.sat.i4(i4 -8, i4 5, i32 2)  ; %res = -8
+      %res = call i4 @llvm.smul.fix.sat.i4(i4 -8, i4 -2, i32 1)  ; %res = 7
 
       ; Scale can affect the saturation result
       %res = call i4 @llvm.smul.fix.sat.i4(i4 2, i4 4, i32 0)  ; %res = 7 (2 x 4 -> clamped to 7)
       %res = call i4 @llvm.smul.fix.sat.i4(i4 2, i4 4, i32 1)  ; %res = 4 (1 x 2 = 2)
+
+
+'``llvm.umul.fix.sat.*``' Intrinsics
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Syntax
+"""""""
+
+This is an overloaded intrinsic. You can use ``llvm.umul.fix.sat``
+on any integer bit width or vectors of integers.
+
+::
+
+      declare i16 @llvm.umul.fix.sat.i16(i16 %a, i16 %b, i32 %scale)
+      declare i32 @llvm.umul.fix.sat.i32(i32 %a, i32 %b, i32 %scale)
+      declare i64 @llvm.umul.fix.sat.i64(i64 %a, i64 %b, i32 %scale)
+      declare <4 x i32> @llvm.umul.fix.sat.v4i32(<4 x i32> %a, <4 x i32> %b, i32 %scale)
+
+Overview
+"""""""""
+
+The '``llvm.umul.fix.sat``' family of intrinsic functions perform unsigned
+fixed point saturation multiplication on 2 arguments of the same scale.
+
+Arguments
+""""""""""
+
+The arguments (%a and %b) and the result may be of integer types of any bit
+width, but they must have the same bit width. ``%a`` and ``%b`` are the two
+values that will undergo unsigned fixed point multiplication. The argument
+``%scale`` represents the scale of both operands, and must be a constant
+integer.
+
+Semantics:
+""""""""""
+
+This operation performs fixed point multiplication on the 2 arguments of a
+specified scale. The result will also be returned in the same scale specified
+in the third argument.
+
+If the result value cannot be precisely represented in the given scale, the
+value is rounded up or down to the closest representable value. The rounding
+direction is unspecified.
+
+The maximum value this operation can clamp to is the largest unsigned value
+representable by the bit width of the first 2 arguments. The minimum value is the
+smallest unsigned value representable by this bit width (zero).
+
+
+Examples
+"""""""""
+
+.. code-block:: llvm
+
+      %res = call i4 @llvm.umul.fix.sat.i4(i4 3, i4 2, i32 0)  ; %res = 6 (2 x 3 = 6)
+      %res = call i4 @llvm.umul.fix.sat.i4(i4 3, i4 2, i32 1)  ; %res = 3 (1.5 x 1 = 1.5)
+
+      ; The result in the following could be rounded down to 2 or up to 2.5
+      %res = call i4 @llvm.umul.fix.sat.i4(i4 3, i4 3, i32 1)  ; %res = 4 (or 5) (1.5 x 1.5 = 2.25)
+
+      ; Saturation
+      %res = call i4 @llvm.umul.fix.sat.i4(i4 8, i4 2, i32 0)  ; %res = 15 (8 x 2 -> clamped to 15)
+      %res = call i4 @llvm.umul.fix.sat.i4(i4 8, i4 8, i32 2)  ; %res = 15 (2 x 2 -> clamped to 3.75)
+
+      ; Scale can affect the saturation result
+      %res = call i4 @llvm.umul.fix.sat.i4(i4 2, i4 4, i32 0)  ; %res = 7 (2 x 4 -> clamped to 7)
+      %res = call i4 @llvm.umul.fix.sat.i4(i4 2, i4 4, i32 1)  ; %res = 4 (1 x 2 = 2)
 
 
 Specialised Arithmetic Intrinsics
@@ -13843,8 +13954,8 @@ The expression:
 is equivalent to the expression a \* b + c, except that rounding will
 not be performed between the multiplication and addition steps if the
 code generator fuses the operations. Fusion is not guaranteed, even if
-the target platform supports it. If a fused multiply-add is required the
-corresponding llvm.fma.\* intrinsic function should be used
+the target platform supports it. If a fused multiply-add is required, the
+corresponding :ref:`llvm.fma <int_fma>` intrinsic function should be used
 instead. This never sets errno, just as '``llvm.fma.*``'.
 
 Examples:
@@ -15249,6 +15360,72 @@ Semantics:
 The result produced is the product of the first two operands added to the third
 operand computed with infinite precision, and then rounded to the target
 precision.
+
+'``llvm.experimental.constrained.fptoui``' Intrinsic
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Syntax:
+"""""""
+
+::
+
+      declare <ty2>
+      @llvm.experimental.constrained.fptoui(<type> <value>,
+                                          metadata <exception behavior>)
+
+Overview:
+"""""""""
+
+The '``llvm.experimental.constrained.fptoui``' intrinsic converts a 
+floating-point ``value`` to its unsigned integer equivalent of type ``ty2``.
+
+Arguments:
+""""""""""
+
+The first argument to the '``llvm.experimental.constrained.fptoui``'
+intrinsic must be :ref:`floating point <t_floating>` or :ref:`vector
+<t_vector>` of floating point values.
+
+The second argument specifies the exception behavior as described above.
+
+Semantics:
+""""""""""
+
+The result produced is an unsigned integer converted from the floating
+point operand. The value is truncated, so it is rounded towards zero.
+
+'``llvm.experimental.constrained.fptosi``' Intrinsic
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Syntax:
+"""""""
+
+::
+
+      declare <ty2>
+      @llvm.experimental.constrained.fptosi(<type> <value>,
+                                          metadata <exception behavior>)
+
+Overview:
+"""""""""
+
+The '``llvm.experimental.constrained.fptosi``' intrinsic converts 
+:ref:`floating-point <t_floating>` ``value`` to type ``ty2``.
+
+Arguments:
+""""""""""
+
+The first argument to the '``llvm.experimental.constrained.fptosi``'
+intrinsic must be :ref:`floating point <t_floating>` or :ref:`vector
+<t_vector>` of floating point values. 
+
+The second argument specifies the exception behavior as described above.
+
+Semantics:
+""""""""""
+
+The result produced is a signed integer converted from the floating
+point operand. The value is truncated, so it is rounded towards zero.
 
 '``llvm.experimental.constrained.fptrunc``' Intrinsic
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -16869,6 +17046,42 @@ a constant.
 
 On the other hand, if constant folding is not run, it will never
 evaluate to true, even in simple cases.
+
+.. _int_ptrmask:
+
+'``llvm.ptrmask``' Intrinsic
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Syntax:
+"""""""
+
+::
+
+      declare ptrty llvm.ptrmask(ptrty %ptr, intty %mask) readnone speculatable
+
+Arguments:
+""""""""""
+
+The first argument is a pointer. The second argument is an integer.
+
+Overview:
+""""""""""
+
+The ``llvm.ptrmask`` intrinsic masks out bits of the pointer according to a mask.
+This allows stripping data from tagged pointers without converting them to an
+integer (ptrtoint/inttoptr). As a consequence, we can preserve more information
+to facilitate alias analysis and underlying-object detection.
+
+Semantics:
+""""""""""
+
+The result of ``ptrmask(ptr, mask)`` is equivalent to
+``getelementptr ptr, (ptrtoint(ptr) & mask) - ptrtoint(ptr)``. Both the returned
+pointer and the first argument are based on the same underlying object (for more
+information on the *based on* terminology see
+:ref:`the pointer aliasing rules <pointeraliasing>`). If the bitwidth of the
+mask argument does not match the pointer size of the target, the mask is
+zero-extended or truncated accordingly.
 
 Stack Map Intrinsics
 --------------------

@@ -57,8 +57,8 @@ public:
       : Sections(Secs) {}
   SectionTableRef(const SectionTableRef &) = default;
 
-  iterator begin() { return iterator(Sections.data()); }
-  iterator end() { return iterator(Sections.data() + Sections.size()); }
+  iterator begin() const { return iterator(Sections.data()); }
+  iterator end() const { return iterator(Sections.data() + Sections.size()); }
   size_t size() const { return Sections.size(); }
 
   SectionBase *getSection(uint32_t Index, Twine ErrMsg);
@@ -884,16 +884,18 @@ protected:
 
 public:
   BasicELFBuilder(uint16_t EM)
-      : EMachine(EM), Obj(llvm::make_unique<Object>()) {}
+      : EMachine(EM), Obj(std::make_unique<Object>()) {}
 };
 
 class BinaryELFBuilder : public BasicELFBuilder {
   MemoryBuffer *MemBuf;
+  uint8_t NewSymbolVisibility;
   void addData(SymbolTableSection *SymTab);
 
 public:
-  BinaryELFBuilder(uint16_t EM, MemoryBuffer *MB)
-      : BasicELFBuilder(EM), MemBuf(MB) {}
+  BinaryELFBuilder(uint16_t EM, MemoryBuffer *MB, uint8_t NewSymbolVisibility)
+      : BasicELFBuilder(EM), MemBuf(MB),
+        NewSymbolVisibility(NewSymbolVisibility) {}
 
   std::unique_ptr<Object> build();
 };
@@ -942,10 +944,12 @@ public:
 class BinaryReader : public Reader {
   const MachineInfo &MInfo;
   MemoryBuffer *MemBuf;
+  uint8_t NewSymbolVisibility;
 
 public:
-  BinaryReader(const MachineInfo &MI, MemoryBuffer *MB)
-      : MInfo(MI), MemBuf(MB) {}
+  BinaryReader(const MachineInfo &MI, MemoryBuffer *MB,
+               const uint8_t NewSymbolVisibility)
+      : MInfo(MI), MemBuf(MB), NewSymbolVisibility(NewSymbolVisibility) {}
   std::unique_ptr<Object> create() const override;
 };
 
@@ -990,6 +994,10 @@ private:
   std::vector<SegPtr> Segments;
   std::vector<SecPtr> RemovedSections;
 
+  static bool sectionIsAlloc(const SectionBase &Sec) {
+    return Sec.Flags & ELF::SHF_ALLOC;
+  };
+
 public:
   template <class T>
   using Range = iterator_range<
@@ -1011,7 +1019,7 @@ public:
   uint8_t OSABI;
   uint8_t ABIVersion;
   uint64_t Entry;
-  uint64_t SHOffset;
+  uint64_t SHOff;
   uint32_t Type;
   uint32_t Machine;
   uint32_t Version;
@@ -1028,6 +1036,13 @@ public:
   ConstRange<SectionBase> sections() const {
     return make_pointee_range(Sections);
   }
+  iterator_range<
+      filter_iterator<pointee_iterator<std::vector<SecPtr>::const_iterator>,
+                      decltype(&sectionIsAlloc)>>
+  allocSections() const {
+    return make_filter_range(make_pointee_range(Sections), sectionIsAlloc);
+  }
+
   SectionBase *findSection(StringRef Name) {
     auto SecIt =
         find_if(Sections, [&](const SecPtr &Sec) { return Sec->Name == Name; });
@@ -1042,7 +1057,7 @@ public:
                        std::function<bool(const SectionBase &)> ToRemove);
   Error removeSymbols(function_ref<bool(const Symbol &)> ToRemove);
   template <class T, class... Ts> T &addSection(Ts &&... Args) {
-    auto Sec = llvm::make_unique<T>(std::forward<Ts>(Args)...);
+    auto Sec = std::make_unique<T>(std::forward<Ts>(Args)...);
     auto Ptr = Sec.get();
     MustBeRelocatable |= isa<RelocationSection>(*Ptr);
     Sections.emplace_back(std::move(Sec));
@@ -1050,7 +1065,7 @@ public:
     return *Ptr;
   }
   Segment &addSegment(ArrayRef<uint8_t> Data) {
-    Segments.emplace_back(llvm::make_unique<Segment>(Data));
+    Segments.emplace_back(std::make_unique<Segment>(Data));
     return *Segments.back();
   }
   bool isRelocatable() const {

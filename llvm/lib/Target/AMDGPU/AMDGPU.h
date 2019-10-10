@@ -208,6 +208,10 @@ ModulePass *createAMDGPUAlwaysInlinePass(bool GlobalOpt = true);
 ModulePass *createR600OpenCLImageTypeLoweringPass();
 FunctionPass *createAMDGPUAnnotateUniformValues();
 
+ModulePass *createAMDGPUPrintfRuntimeBinding();
+void initializeAMDGPUPrintfRuntimeBindingPass(PassRegistry&);
+extern char &AMDGPUPrintfRuntimeBindingID;
+
 ModulePass* createAMDGPUUnifyMetadataPass();
 void initializeAMDGPUUnifyMetadataPass(PassRegistry&);
 extern char &AMDGPUUnifyMetadataID;

@@ -1,5 +1,3 @@
-; Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
-; Notified per clause 4(b) of the license.
 ; RUN: opt -mtriple=amdgcn--amdpal -S -instcombine <%s | FileCheck --check-prefixes=GCN %s
 
 ; Check that sin/cos is not folded to tan on amdgcn.

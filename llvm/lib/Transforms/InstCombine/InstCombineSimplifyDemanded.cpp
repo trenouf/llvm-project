@@ -3,8 +3,6 @@
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-// Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
-// Notified per clause 4(b) of the license.
 //
 //===----------------------------------------------------------------------===//
 //
@@ -1186,38 +1184,17 @@ Value *InstCombiner::SimplifyDemandedVectorElts(Value *V, APInt DemandedElts,
     // operands we may have.  We know there must be at least one, or we
     // wouldn't have a vector result to get here. Note that we intentionally
     // merge the undef bits here since gepping with either an undef base or
-    // index results in undef.
-
-    auto simplifyGEPOperand = [&](unsigned i, bool isIndexStruct) -> bool {
+    // index results in undef. 
+    for (unsigned i = 0; i < I->getNumOperands(); i++) {
       if (isa<UndefValue>(I->getOperand(i))) {
         // If the entire vector is undefined, just return this info.
         UndefElts = EltMask;
-        return true;
-      }
-
-      if (I->getOperand(i)->getType()->isVectorTy()) {
-        // If we have a vector of indices into a struct element of the GEP, and
-        // change a single element this into an undef while preserving the
-        // others, that breaks the guarantee that each index of a
-        // vector-of-pointers into a struct will have the same index.
-        if (!isIndexStruct) {
-          APInt UndefEltsOp(VWidth, 0);
-          simplifyAndSetOp(I, i, DemandedElts, UndefEltsOp);
-          UndefElts |= UndefEltsOp;
-        }
-      }
-
-      return false;
-    };
-
-    if (simplifyGEPOperand(0, false)) {
-      return nullptr;
-    }
-
-    gep_type_iterator GTI = gep_type_begin(cast<GetElementPtrInst>(I));
-    for (unsigned i = 1; i < I->getNumOperands(); i++, GTI++) {
-      if (simplifyGEPOperand(i, GTI.isStruct())) {
         return nullptr;
+      }
+      if (I->getOperand(i)->getType()->isVectorTy()) {
+        APInt UndefEltsOp(VWidth, 0);
+        simplifyAndSetOp(I, i, DemandedElts, UndefEltsOp);
+        UndefElts |= UndefEltsOp;
       }
     }
 
@@ -1697,8 +1674,11 @@ Value *InstCombiner::SimplifyDemandedVectorElts(Value *V, APInt DemandedElts,
     case Intrinsic::amdgcn_buffer_load_format:
     case Intrinsic::amdgcn_raw_buffer_load:
     case Intrinsic::amdgcn_raw_buffer_load_format:
+    case Intrinsic::amdgcn_raw_tbuffer_load:
     case Intrinsic::amdgcn_struct_buffer_load:
     case Intrinsic::amdgcn_struct_buffer_load_format:
+    case Intrinsic::amdgcn_struct_tbuffer_load:
+    case Intrinsic::amdgcn_tbuffer_load:
       return simplifyAMDGCNMemoryIntrinsicDemanded(II, DemandedElts);
     default: {
       if (getAMDGPUImageDMaskIntrinsic(II->getIntrinsicID()))

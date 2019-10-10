@@ -117,8 +117,10 @@ module ``M`` loaded on an ThreadSafeContext ``Ctx``:
   if (!EntrySym)
     return EntrySym.takeError();
 
+  // Cast the entry point address to a function pointer.
   auto *Entry = (void(*)())EntrySym.getAddress();
 
+  // Call into JIT'd code.
   Entry();
 
 The builder clasess provide a number of configuration options that can be
@@ -174,7 +176,7 @@ checking omitted for brevity) as:
 
   ExecutionSession ES;
   RTDyldObjectLinkingLayer ObjLinkingLayer(
-      ES, []() { return llvm::make_unique<SectionMemoryManager>(); });
+      ES, []() { return std::make_unique<SectionMemoryManager>(); });
   CXXCompileLayer CXXLayer(ES, ObjLinkingLayer);
 
   // Create JITDylib "A" and add code to it using the CXX layer.
@@ -453,7 +455,7 @@ std::unique_ptr<LLVMContext>:
 
   .. code-block:: c++
 
-    ThreadSafeContext TSCtx(llvm::make_unique<LLVMContext>());
+    ThreadSafeContext TSCtx(std::make_unique<LLVMContext>());
 
 ThreadSafeModules can be constructed from a pair of a std::unique_ptr<Module>
 and a ThreadSafeContext value. ThreadSafeContext values may be shared between
@@ -462,10 +464,10 @@ multiple ThreadSafeModules:
   .. code-block:: c++
 
     ThreadSafeModule TSM1(
-      llvm::make_unique<Module>("M1", *TSCtx.getContext()), TSCtx);
+      std::make_unique<Module>("M1", *TSCtx.getContext()), TSCtx);
 
     ThreadSafeModule TSM2(
-      llvm::make_unique<Module>("M2", *TSCtx.getContext()), TSCtx);
+      std::make_unique<Module>("M2", *TSCtx.getContext()), TSCtx);
 
 Before using a ThreadSafeContext, clients should ensure that either the context
 is only accessible on the current thread, or that the context is locked. In the
@@ -476,24 +478,21 @@ or creating any Modules attached to it. E.g.
 
   .. code-block:: c++
 
+    ThreadSafeContext TSCtx(std::make_unique<LLVMContext>());
 
-  ThreadSafeContext TSCtx(llvm::make_unique<LLVMContext>());
+    ThreadPool TP(NumThreads);
+    JITStack J;
 
-  ThreadPool TP(NumThreads);
-  JITStack J;
+    for (auto &ModulePath : ModulePaths) {
+      TP.async(
+        [&]() {
+          auto Lock = TSCtx.getLock();
+          auto M = loadModuleOnContext(ModulePath, TSCtx.getContext());
+          J.addModule(ThreadSafeModule(std::move(M), TSCtx));
+        });
+    }
 
-  for (auto &ModulePath : ModulePaths) {
-    TP.async(
-      [&]() {
-        auto Lock = TSCtx.getLock();
-
-        auto M = loadModuleOnContext(ModulePath, TSCtx.getContext());
-
-        J.addModule(ThreadSafeModule(std::move(M), TSCtx));
-      });
-  }
-
-  TP.wait();
+    TP.wait();
 
 To make exclusive access to Modules easier to manage the ThreadSafeModule class
 provides a convenince function, ``withModuleDo``, that implicitly (1) locks the
@@ -522,8 +521,8 @@ constructs a new ThreadSafeContext value from a std::unique_ptr<LLVMContext>:
     // Maximize concurrency opportunities by loading every module on a
     // separate context.
     for (const auto &IRPath : IRPaths) {
-      auto Ctx = llvm::make_unique<LLVMContext>();
-      auto M = llvm::make_unique<LLVMContext>("M", *Ctx);
+      auto Ctx = std::make_unique<LLVMContext>();
+      auto M = std::make_unique<LLVMContext>("M", *Ctx);
       CompileLayer.add(ES.getMainJITDylib(),
                        ThreadSafeModule(std::move(M), std::move(Ctx)));
     }
@@ -534,7 +533,7 @@ all modules on the same context:
   .. code-block:: c++
 
     // Save memory by using one context for all Modules:
-    ThreadSafeContext TSCtx(llvm::make_unique<LLVMContext>());
+    ThreadSafeContext TSCtx(std::make_unique<LLVMContext>());
     for (const auto &IRPath : IRPaths) {
       ThreadSafeModule TSM(parsePath(IRPath, *TSCtx.getContext()), TSCtx);
       CompileLayer.add(ES.getMainJITDylib(), ThreadSafeModule(std::move(TSM));

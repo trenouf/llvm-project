@@ -63,6 +63,7 @@ static cl::opt<bool> EnableSpillSGPRToVGPR(
 
 SIRegisterInfo::SIRegisterInfo(const GCNSubtarget &ST) :
   AMDGPURegisterInfo(),
+  ST(ST),
   SGPRPressureSets(getNumRegPressureSets()),
   VGPRPressureSets(getNumRegPressureSets()),
   AGPRPressureSets(getNumRegPressureSets()),
@@ -303,32 +304,17 @@ bool SIRegisterInfo::requiresRegisterScavenging(const MachineFunction &Fn) const
 
 bool SIRegisterInfo::requiresFrameIndexScavenging(
   const MachineFunction &MF) const {
-  const MachineFrameInfo &MFI = MF.getFrameInfo();
-  if (MFI.hasStackObjects())
-    return true;
-
-  // May need to deal with callee saved registers.
-  const SIMachineFunctionInfo *Info = MF.getInfo<SIMachineFunctionInfo>();
-  return !Info->isEntryFunction();
+  // Do not use frame virtual registers. They used to be used for SGPRs, but
+  // once we reach PrologEpilogInserter, we can no longer spill SGPRs. If the
+  // scavenger fails, we can increment/decrement the necessary SGPRs to avoid a
+  // spill.
+  return false;
 }
 
 bool SIRegisterInfo::requiresFrameIndexReplacementScavenging(
   const MachineFunction &MF) const {
   const MachineFrameInfo &MFI = MF.getFrameInfo();
-  if (!MFI.hasStackObjects())
-    return false;
-
-  // The scavenger is used for large frames which may require finding a free
-  // register for large offsets.
-  if (!isUInt<12>(MFI.getStackSize()))
-    return true;
-
-  // If using scalar stores, for spills, m0 is needed for the scalar store
-  // offset (pre-GFX9). m0 is unallocatable, so we can't create a virtual
-  // register for it during frame index elimination, so the scavenger is
-  // directly needed.
-  return MF.getSubtarget<GCNSubtarget>().hasScalarStores() &&
-         MF.getInfo<SIMachineFunctionInfo>()->hasSpilledSGPRs();
+  return MFI.hasStackObjects();
 }
 
 bool SIRegisterInfo::requiresVirtualBaseRegisters(
@@ -392,9 +378,9 @@ void SIRegisterInfo::materializeFrameBaseRegister(MachineBasicBlock *MBB,
   }
 
   MachineRegisterInfo &MRI = MF->getRegInfo();
-  unsigned OffsetReg = MRI.createVirtualRegister(&AMDGPU::SReg_32_XM0RegClass);
+  Register OffsetReg = MRI.createVirtualRegister(&AMDGPU::SReg_32_XM0RegClass);
 
-  unsigned FIReg = MRI.createVirtualRegister(&AMDGPU::VGPR_32RegClass);
+  Register FIReg = MRI.createVirtualRegister(&AMDGPU::VGPR_32RegClass);
 
   BuildMI(*MBB, Ins, DL, TII->get(AMDGPU::S_MOV_B32), OffsetReg)
     .addImm(Offset);
@@ -717,8 +703,9 @@ void SIRegisterInfo::buildSpillLoadStore(MachineBasicBlock::iterator MI,
   }
 
   for (unsigned i = 0, e = NumSubRegs; i != e; ++i, Offset += EltSize) {
-    unsigned SubReg = NumSubRegs == 1 ?
-      Register(ValueReg) : getSubReg(ValueReg, getSubRegFromChannel(i));
+    Register SubReg = NumSubRegs == 1
+                          ? Register(ValueReg)
+                          : getSubReg(ValueReg, getSubRegFromChannel(i));
 
     unsigned SOffsetRegState = 0;
     unsigned SrcDstRegState = getDefRegState(!IsStore);
@@ -804,7 +791,6 @@ bool SIRegisterInfo::spillSGPR(MachineBasicBlock::iterator MI,
   if (OnlyToVGPR && !SpillToVGPR)
     return false;
 
-  MachineRegisterInfo &MRI = MF->getRegInfo();
   const GCNSubtarget &ST =  MF->getSubtarget<GCNSubtarget>();
   const SIInstrInfo *TII = ST.getInstrInfo();
 
@@ -831,7 +817,7 @@ bool SIRegisterInfo::spillSGPR(MachineBasicBlock::iterator MI,
 
   if (SpillToSMEM) {
     if (RS->isRegUsed(AMDGPU::M0)) {
-      M0CopyReg = MRI.createVirtualRegister(&AMDGPU::SReg_32_XM0RegClass);
+      M0CopyReg = RS->scavengeRegister(&AMDGPU::SReg_32_XM0RegClass, MI, 0, false);
       BuildMI(*MBB, MI, DL, TII->get(AMDGPU::COPY), M0CopyReg)
         .addReg(AMDGPU::M0);
     }
@@ -850,11 +836,15 @@ bool SIRegisterInfo::spillSGPR(MachineBasicBlock::iterator MI,
   ArrayRef<int16_t> SplitParts = getRegSplitParts(RC, EltSize);
   unsigned NumSubRegs = SplitParts.empty() ? 1 : SplitParts.size();
 
+  // Scavenged temporary VGPR to use. It must be scavenged once for any number
+  // of spilled subregs.
+  Register TmpVGPR;
+
   // SubReg carries the "Kill" flag when SubReg == SuperReg.
   unsigned SubKillState = getKillRegState((NumSubRegs == 1) && IsKill);
   for (unsigned i = 0, e = NumSubRegs; i < e; ++i) {
-    unsigned SubReg = NumSubRegs == 1 ?
-      SuperReg : getSubReg(SuperReg, SplitParts[i]);
+    Register SubReg =
+        NumSubRegs == 1 ? SuperReg : getSubReg(SuperReg, SplitParts[i]);
 
     if (SpillToSMEM) {
       int64_t FrOffset = FrameInfo.getObjectOffset(Index);
@@ -926,13 +916,13 @@ bool SIRegisterInfo::spillSGPR(MachineBasicBlock::iterator MI,
 
       // Spill SGPR to a frame index.
       // TODO: Should VI try to spill to VGPR and then spill to SMEM?
-      unsigned TmpReg = MRI.createVirtualRegister(&AMDGPU::VGPR_32RegClass);
+      if (!TmpVGPR.isValid())
+        TmpVGPR = RS->scavengeRegister(&AMDGPU::VGPR_32RegClass, MI, 0);
       // TODO: Should VI try to spill to VGPR and then spill to SMEM?
 
       MachineInstrBuilder Mov
-        = BuildMI(*MBB, MI, DL, TII->get(AMDGPU::V_MOV_B32_e32), TmpReg)
+        = BuildMI(*MBB, MI, DL, TII->get(AMDGPU::V_MOV_B32_e32), TmpVGPR)
         .addReg(SubReg, SubKillState);
-
 
       // There could be undef components of a spilled super register.
       // TODO: Can we detect this and skip the spill?
@@ -951,7 +941,7 @@ bool SIRegisterInfo::spillSGPR(MachineBasicBlock::iterator MI,
         = MF->getMachineMemOperand(PtrInfo, MachineMemOperand::MOStore,
                                    EltSize, MinAlign(Align, EltSize * i));
       BuildMI(*MBB, MI, DL, TII->get(AMDGPU::SI_SPILL_V32_SAVE))
-        .addReg(TmpReg, RegState::Kill)       // src
+        .addReg(TmpVGPR, RegState::Kill)      // src
         .addFrameIndex(Index)                 // vaddr
         .addReg(MFI->getScratchRSrcReg())     // srrsrc
         .addReg(MFI->getStackPtrOffsetReg())  // soffset
@@ -975,7 +965,6 @@ bool SIRegisterInfo::restoreSGPR(MachineBasicBlock::iterator MI,
                                  RegScavenger *RS,
                                  bool OnlyToVGPR) const {
   MachineFunction *MF = MI->getParent()->getParent();
-  MachineRegisterInfo &MRI = MF->getRegInfo();
   MachineBasicBlock *MBB = MI->getParent();
   SIMachineFunctionInfo *MFI = MF->getInfo<SIMachineFunctionInfo>();
 
@@ -1002,7 +991,7 @@ bool SIRegisterInfo::restoreSGPR(MachineBasicBlock::iterator MI,
 
   if (SpillToSMEM) {
     if (RS->isRegUsed(AMDGPU::M0)) {
-      M0CopyReg = MRI.createVirtualRegister(&AMDGPU::SReg_32_XM0RegClass);
+      M0CopyReg = RS->scavengeRegister(&AMDGPU::SReg_32_XM0RegClass, MI, 0, false);
       BuildMI(*MBB, MI, DL, TII->get(AMDGPU::COPY), M0CopyReg)
         .addReg(AMDGPU::M0);
     }
@@ -1027,9 +1016,11 @@ bool SIRegisterInfo::restoreSGPR(MachineBasicBlock::iterator MI,
   // SubReg carries the "Kill" flag when SubReg == SuperReg.
   int64_t FrOffset = FrameInfo.getObjectOffset(Index);
 
+  Register TmpVGPR;
+
   for (unsigned i = 0, e = NumSubRegs; i < e; ++i) {
-    unsigned SubReg = NumSubRegs == 1 ?
-      SuperReg : getSubReg(SuperReg, SplitParts[i]);
+    Register SubReg =
+        NumSubRegs == 1 ? SuperReg : getSubReg(SuperReg, SplitParts[i]);
 
     if (SpillToSMEM) {
       // FIXME: Size may be > 4 but extra bytes wasted.
@@ -1081,7 +1072,8 @@ bool SIRegisterInfo::restoreSGPR(MachineBasicBlock::iterator MI,
 
       // Restore SGPR from a stack slot.
       // FIXME: We should use S_LOAD_DWORD here for VI.
-      unsigned TmpReg = MRI.createVirtualRegister(&AMDGPU::VGPR_32RegClass);
+      if (!TmpVGPR.isValid())
+        TmpVGPR = RS->scavengeRegister(&AMDGPU::VGPR_32RegClass, MI, 0);
       unsigned Align = FrameInfo.getObjectAlignment(Index);
 
       MachinePointerInfo PtrInfo
@@ -1091,7 +1083,7 @@ bool SIRegisterInfo::restoreSGPR(MachineBasicBlock::iterator MI,
         MachineMemOperand::MOLoad, EltSize,
         MinAlign(Align, EltSize * i));
 
-      BuildMI(*MBB, MI, DL, TII->get(AMDGPU::SI_SPILL_V32_RESTORE), TmpReg)
+      BuildMI(*MBB, MI, DL, TII->get(AMDGPU::SI_SPILL_V32_RESTORE), TmpVGPR)
         .addFrameIndex(Index)                 // vaddr
         .addReg(MFI->getScratchRSrcReg())     // srsrc
         .addReg(MFI->getStackPtrOffsetReg())  // soffset
@@ -1100,7 +1092,7 @@ bool SIRegisterInfo::restoreSGPR(MachineBasicBlock::iterator MI,
 
       auto MIB =
         BuildMI(*MBB, MI, DL, TII->get(AMDGPU::V_READFIRSTLANE_B32), SubReg)
-        .addReg(TmpReg, RegState::Kill);
+        .addReg(TmpVGPR, RegState::Kill);
 
       if (NumSubRegs > 1)
         MIB.addReg(MI->getOperand(0).getReg(), RegState::ImplicitDefine);
@@ -1151,7 +1143,6 @@ void SIRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator MI,
                                         int SPAdj, unsigned FIOperandNum,
                                         RegScavenger *RS) const {
   MachineFunction *MF = MI->getParent()->getParent();
-  MachineRegisterInfo &MRI = MF->getRegInfo();
   MachineBasicBlock *MBB = MI->getParent();
   SIMachineFunctionInfo *MFI = MF->getInfo<SIMachineFunctionInfo>();
   MachineFrameInfo &FrameInfo = MF->getFrameInfo();
@@ -1265,13 +1256,16 @@ void SIRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator MI,
         // In an entry function/kernel the offset is already the absolute
         // address relative to the frame register.
 
-        unsigned DiffReg
-          = MRI.createVirtualRegister(&AMDGPU::SReg_32_XM0RegClass);
+        Register TmpDiffReg =
+          RS->scavengeRegister(&AMDGPU::SReg_32_XM0RegClass, MI, 0, false);
+
+        // If there's no free SGPR, in-place modify the FP
+        Register DiffReg = TmpDiffReg.isValid() ? TmpDiffReg : FrameReg;
 
         bool IsCopy = MI->getOpcode() == AMDGPU::V_MOV_B32_e32;
         Register ResultReg = IsCopy ?
           MI->getOperand(0).getReg() :
-          MRI.createVirtualRegister(&AMDGPU::VGPR_32RegClass);
+          RS->scavengeRegister(&AMDGPU::VGPR_32RegClass, MI, 0);
 
         BuildMI(*MBB, MI, DL, TII->get(AMDGPU::S_SUB_U32), DiffReg)
           .addReg(FrameReg)
@@ -1281,33 +1275,78 @@ void SIRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator MI,
         if (Offset == 0) {
           // XXX - This never happens because of emergency scavenging slot at 0?
           BuildMI(*MBB, MI, DL, TII->get(AMDGPU::V_LSHRREV_B32_e64), ResultReg)
-            .addImm(Log2_32(ST.getWavefrontSize()))
+            .addImm(ST.getWavefrontSizeLog2())
             .addReg(DiffReg);
         } else {
-          unsigned ScaledReg
-            = MRI.createVirtualRegister(&AMDGPU::VGPR_32RegClass);
+          if (auto MIB = TII->getAddNoCarry(*MBB, MI, DL, ResultReg, *RS)) {
+            Register ScaledReg =
+              RS->scavengeRegister(&AMDGPU::VGPR_32RegClass, MIB, 0);
 
-          BuildMI(*MBB, MI, DL, TII->get(AMDGPU::V_LSHRREV_B32_e64), ScaledReg)
-            .addImm(Log2_32(ST.getWavefrontSize()))
-            .addReg(DiffReg, RegState::Kill);
+            BuildMI(*MBB, *MIB, DL, TII->get(AMDGPU::V_LSHRREV_B32_e64),
+                    ScaledReg)
+              .addImm(ST.getWavefrontSizeLog2())
+              .addReg(DiffReg, RegState::Kill);
 
-          // TODO: Fold if use instruction is another add of a constant.
-          if (AMDGPU::isInlinableLiteral32(Offset, ST.hasInv2PiInlineImm())) {
-            TII->getAddNoCarry(*MBB, MI, DL, ResultReg)
-              .addImm(Offset)
-              .addReg(ScaledReg, RegState::Kill)
-              .addImm(0); // clamp bit
+            const bool IsVOP2 = MIB->getOpcode() == AMDGPU::V_ADD_U32_e32;
+
+            // TODO: Fold if use instruction is another add of a constant.
+            if (IsVOP2 || AMDGPU::isInlinableLiteral32(Offset, ST.hasInv2PiInlineImm())) {
+              // FIXME: This can fail
+              MIB.addImm(Offset);
+              MIB.addReg(ScaledReg, RegState::Kill);
+              if (!IsVOP2)
+                MIB.addImm(0); // clamp bit
+            } else {
+              Register ConstOffsetReg =
+                RS->scavengeRegister(&AMDGPU::SReg_32_XM0RegClass, MIB, 0, false);
+
+              // This should always be able to use the unused carry out.
+              assert(ConstOffsetReg && "this scavenge should not be able to fail");
+
+              BuildMI(*MBB, *MIB, DL, TII->get(AMDGPU::S_MOV_B32), ConstOffsetReg)
+                .addImm(Offset);
+              MIB.addReg(ConstOffsetReg, RegState::Kill);
+              MIB.addReg(ScaledReg, RegState::Kill);
+              MIB.addImm(0); // clamp bit
+            }
           } else {
-            unsigned ConstOffsetReg
-              = MRI.createVirtualRegister(&AMDGPU::SReg_32_XM0RegClass);
+            // We have to produce a carry out, and we there isn't a free SGPR
+            // pair for it. We can keep the whole computation on the SALU to
+            // avoid clobbering an additional register at the cost of an extra
+            // mov.
 
-            BuildMI(*MBB, MI, DL, TII->get(AMDGPU::S_MOV_B32), ConstOffsetReg)
-              .addImm(Offset);
-            TII->getAddNoCarry(*MBB, MI, DL, ResultReg)
-              .addReg(ConstOffsetReg, RegState::Kill)
+            // We may have 1 free scratch SGPR even though a carry out is
+            // unavailable. Only one additional mov is needed.
+            Register TmpScaledReg =
+                RS->scavengeRegister(&AMDGPU::SReg_32_XM0RegClass, MI, 0, false);
+            Register ScaledReg = TmpScaledReg.isValid() ? TmpScaledReg : DiffReg;
+
+            BuildMI(*MBB, MI, DL, TII->get(AMDGPU::S_LSHR_B32), ScaledReg)
+              .addReg(DiffReg, RegState::Kill)
+              .addImm(ST.getWavefrontSizeLog2());
+            BuildMI(*MBB, MI, DL, TII->get(AMDGPU::S_ADD_U32), ScaledReg)
               .addReg(ScaledReg, RegState::Kill)
-              .addImm(0); // clamp bit
+              .addImm(Offset);
+            BuildMI(*MBB, MI, DL, TII->get(AMDGPU::COPY), ResultReg)
+              .addReg(ScaledReg, RegState::Kill);
+
+            // If there were truly no free SGPRs, we need to undo everything.
+            if (!TmpScaledReg.isValid()) {
+              BuildMI(*MBB, MI, DL, TII->get(AMDGPU::S_SUB_U32), ScaledReg)
+                .addReg(ScaledReg, RegState::Kill)
+                .addImm(Offset);
+            BuildMI(*MBB, MI, DL, TII->get(AMDGPU::S_LSHL_B32), ScaledReg)
+              .addReg(DiffReg, RegState::Kill)
+              .addImm(ST.getWavefrontSizeLog2());
+            }
           }
+        }
+
+        if (!TmpDiffReg.isValid()) {
+          // Restore the FP.
+          BuildMI(*MBB, MI, DL, TII->get(AMDGPU::S_ADD_U32), FrameReg)
+            .addReg(FrameReg)
+            .addReg(MFI->getScratchWaveOffsetReg());
         }
 
         // Don't introduce an extra copy if we're just materializing in a mov.
@@ -1347,7 +1386,7 @@ void SIRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator MI,
       int64_t Offset = FrameInfo.getObjectOffset(Index);
       FIOp.ChangeToImmediate(Offset);
       if (!TII->isImmOperandLegal(*MI, FIOperandNum, FIOp)) {
-        unsigned TmpReg = MRI.createVirtualRegister(&AMDGPU::VGPR_32RegClass);
+        Register TmpReg = RS->scavengeRegister(&AMDGPU::VGPR_32RegClass, MI, 0);
         BuildMI(*MBB, MI, DL, TII->get(AMDGPU::V_MOV_B32_e32), TmpReg)
           .addImm(Offset);
         FIOp.ChangeToRegister(TmpReg, false, false, true);
@@ -1404,8 +1443,6 @@ const TargetRegisterClass *SIRegisterInfo::getPhysRegClass(unsigned Reg) const {
 // TargetRegisterClass to mark which classes are VGPRs to make this trivial.
 bool SIRegisterInfo::hasVGPRs(const TargetRegisterClass *RC) const {
   unsigned Size = getRegSizeInBits(*RC);
-  if (Size < 32)
-    return false;
   switch (Size) {
   case 32:
     return getCommonSubClass(&AMDGPU::VGPR_32RegClass, RC) != nullptr;
@@ -1423,8 +1460,11 @@ bool SIRegisterInfo::hasVGPRs(const TargetRegisterClass *RC) const {
     return getCommonSubClass(&AMDGPU::VReg_512RegClass, RC) != nullptr;
   case 1024:
     return getCommonSubClass(&AMDGPU::VReg_1024RegClass, RC) != nullptr;
+  case 1:
+    return getCommonSubClass(&AMDGPU::VReg_1RegClass, RC) != nullptr;
   default:
-    llvm_unreachable("Invalid register class size");
+    assert(Size < 32 && "Invalid register class size");
+    return false;
   }
 }
 
@@ -1472,6 +1512,8 @@ const TargetRegisterClass *SIRegisterInfo::getEquivalentVGPRClass(
     return &AMDGPU::VReg_512RegClass;
   case 1024:
     return &AMDGPU::VReg_1024RegClass;
+  case 1:
+    return &AMDGPU::VReg_1RegClass;
   default:
     llvm_unreachable("Invalid register class size");
   }
@@ -1581,6 +1623,15 @@ const TargetRegisterClass *SIRegisterInfo::getSubRegClass(
       llvm_unreachable("Invalid sub-register class size");
     }
   }
+}
+
+bool SIRegisterInfo::opCanUseInlineConstant(unsigned OpType) const {
+  if (OpType >= AMDGPU::OPERAND_REG_INLINE_AC_FIRST &&
+      OpType <= AMDGPU::OPERAND_REG_INLINE_AC_LAST)
+    return !ST.hasMFMAInlineLiteralBug();
+
+  return OpType >= AMDGPU::OPERAND_SRC_FIRST &&
+         OpType <= AMDGPU::OPERAND_SRC_LAST;
 }
 
 bool SIRegisterInfo::shouldRewriteCopySrc(

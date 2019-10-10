@@ -735,7 +735,7 @@ namespace llvm {
                                        const SelectionDAG &DAG,
                                        unsigned Depth = 0) const override;
 
-    unsigned getPrefLoopAlignment(MachineLoop *ML) const override;
+    llvm::Align getPrefLoopAlignment(MachineLoop *ML) const override;
 
     bool shouldInsertFencesForAtomic(const Instruction *I) const override {
       return true;
@@ -1019,6 +1019,8 @@ namespace llvm {
                                          SDValue Chain, SDValue &LROpOut,
                                          SDValue &FPOpOut,
                                          const SDLoc &dl) const;
+
+    SDValue getTOCEntry(SelectionDAG &DAG, const SDLoc &dl, SDValue GA) const;
 
     SDValue LowerRETURNADDR(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerFRAMEADDR(SDValue Op, SelectionDAG &DAG) const;

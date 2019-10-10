@@ -919,6 +919,7 @@ std::string TreePredicateFn::getPredCode() const {
 
   if (isAtomic()) {
     if (getMemoryVT() == nullptr && !isAtomicOrderingMonotonic() &&
+        getAddressSpaces() == nullptr &&
         !isAtomicOrderingAcquire() && !isAtomicOrderingRelease() &&
         !isAtomicOrderingAcquireRelease() &&
         !isAtomicOrderingSequentiallyConsistent() &&
@@ -1393,7 +1394,7 @@ std::string PatternToMatch::getPredicateCheck() const {
     if (!P.getCondString().empty())
       PredList.push_back(&P);
   }
-  llvm::sort(PredList, deref<llvm::less>());
+  llvm::sort(PredList, deref<std::less<>>());
 
   std::string Check;
   for (unsigned i = 0, e = PredList.size(); i != e; ++i) {
@@ -3101,7 +3102,7 @@ void CodeGenDAGPatterns::ParsePatternFragments(bool OutFrags) {
 
     ListInit *LI = Frag->getValueAsListInit("Fragments");
     TreePattern *P =
-        (PatternFragments[Frag] = llvm::make_unique<TreePattern>(
+        (PatternFragments[Frag] = std::make_unique<TreePattern>(
              Frag, LI, !Frag->isSubClassOf("OutPatFrag"),
              *this)).get();
 

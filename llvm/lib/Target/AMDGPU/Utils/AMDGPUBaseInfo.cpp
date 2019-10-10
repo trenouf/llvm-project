@@ -3,8 +3,6 @@
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-// Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
-// Notified per clause 4(b) of the license.
 //
 //===----------------------------------------------------------------------===//
 
@@ -133,7 +131,7 @@ int getMaskedMIMGOp(unsigned Opc, unsigned NewChannels) {
 struct MUBUFInfo {
   uint16_t Opcode;
   uint16_t BaseOpcode;
-  uint8_t dwords;
+  uint8_t elements;
   bool has_vaddr;
   bool has_srsrc;
   bool has_soffset;
@@ -148,14 +146,14 @@ int getMUBUFBaseOpcode(unsigned Opc) {
   return Info ? Info->BaseOpcode : -1;
 }
 
-int getMUBUFOpcode(unsigned BaseOpc, unsigned Dwords) {
-  const MUBUFInfo *Info = getMUBUFInfoFromBaseOpcodeAndDwords(BaseOpc, Dwords);
+int getMUBUFOpcode(unsigned BaseOpc, unsigned Elements) {
+  const MUBUFInfo *Info = getMUBUFInfoFromBaseOpcodeAndElements(BaseOpc, Elements);
   return Info ? Info->Opcode : -1;
 }
 
-int getMUBUFDwords(unsigned Opc) {
+int getMUBUFElements(unsigned Opc) {
   const MUBUFInfo *Info = getMUBUFOpcodeHelper(Opc);
-  return Info ? Info->dwords : 0;
+  return Info ? Info->elements : 0;
 }
 
 bool getMUBUFHasVAddr(unsigned Opc) {
