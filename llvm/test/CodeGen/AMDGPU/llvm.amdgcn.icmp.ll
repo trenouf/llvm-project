@@ -1,3 +1,5 @@
+; Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
+; Notified per clause 4(b) of the license.
 ; RUN: llc -march=amdgcn -verify-machineinstrs < %s | FileCheck -enable-var-scope -check-prefixes=GCN,SI %s
 ; RUN: llc -march=amdgcn -mcpu=fiji -verify-machineinstrs < %s | FileCheck -enable-var-scope -check-prefixes=GCN,VI %s
 
@@ -304,7 +306,7 @@ define amdgpu_kernel void @v_icmp_i16_sle(i64 addrspace(1)* %out, i16 %src) {
 ; SI-NEXT: s_mov_b32 s{{[0-9]+}}, -1
 ; GCN-NEXT: v_mov_b32_e32
 ; GCN-NEXT: v_mov_b32_e32
-; GCN-NEXT: {{global|flat|buffer}}_store_dwordx2
+; GCN: {{global|flat|buffer}}_store_dwordx2
 define amdgpu_kernel void @v_icmp_i1_ne0(i64 addrspace(1)* %out, i32 %a, i32 %b) {
   %c0 = icmp ugt i32 %a, 1
   %c1 = icmp ugt i32 %b, 2

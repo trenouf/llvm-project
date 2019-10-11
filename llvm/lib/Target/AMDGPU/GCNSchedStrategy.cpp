@@ -3,6 +3,8 @@
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+// Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
+// Notified per clause 4(b) of the license.
 //
 //===----------------------------------------------------------------------===//
 //
@@ -230,33 +232,11 @@ SUnit *GCNMaxOccupancySchedStrategy::pickNodeBidirectional(bool &IsTopNode) {
   // Pick best from BotCand and TopCand.
   LLVM_DEBUG(dbgs() << "Top Cand: "; traceCandidate(TopCand);
              dbgs() << "Bot Cand: "; traceCandidate(BotCand););
-  SchedCandidate Cand;
-  if (TopCand.Reason == BotCand.Reason) {
-    Cand = BotCand;
-    GenericSchedulerBase::CandReason TopReason = TopCand.Reason;
-    TopCand.Reason = NoCand;
-    GenericScheduler::tryCandidate(Cand, TopCand, nullptr);
-    if (TopCand.Reason != NoCand) {
-      Cand.setBest(TopCand);
-    } else {
-      TopCand.Reason = TopReason;
-    }
-  } else {
-    if (TopCand.Reason == RegExcess && TopCand.RPDelta.Excess.getUnitInc() <= 0) {
-      Cand = TopCand;
-    } else if (BotCand.Reason == RegExcess && BotCand.RPDelta.Excess.getUnitInc() <= 0) {
-      Cand = BotCand;
-    } else if (TopCand.Reason == RegCritical && TopCand.RPDelta.CriticalMax.getUnitInc() <= 0) {
-      Cand = TopCand;
-    } else if (BotCand.Reason == RegCritical && BotCand.RPDelta.CriticalMax.getUnitInc() <= 0) {
-      Cand = BotCand;
-    } else {
-      if (BotCand.Reason > TopCand.Reason) {
-        Cand = TopCand;
-      } else {
-        Cand = BotCand;
-      }
-    }
+  SchedCandidate Cand = BotCand;
+  TopCand.Reason = NoCand;
+  GenericScheduler::tryCandidate(Cand, TopCand, nullptr);
+  if (TopCand.Reason != NoCand) {
+    Cand.setBest(TopCand);
   }
   LLVM_DEBUG(dbgs() << "Picking: "; traceCandidate(Cand););
 

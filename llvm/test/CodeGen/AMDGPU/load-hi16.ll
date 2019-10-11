@@ -1,3 +1,5 @@
+; Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
+; Notified per clause 4(b) of the license.
 ; RUN: llc -march=amdgcn -mcpu=gfx900 -amdgpu-sroa=0 -mattr=-promote-alloca -verify-machineinstrs < %s | FileCheck -check-prefixes=GCN,GFX900 %s
 ; RUN: llc -march=amdgcn -mcpu=gfx906 -amdgpu-sroa=0 -mattr=-promote-alloca -verify-machineinstrs < %s | FileCheck -check-prefixes=GCN,GFX906,NO-D16-HI %s
 ; RUN: llc -march=amdgcn -mcpu=fiji -amdgpu-sroa=0 -mattr=-promote-alloca -verify-machineinstrs < %s | FileCheck -check-prefixes=GCN,GFX803,NO-D16-HI %s
@@ -5,11 +7,11 @@
 ; GCN-LABEL: {{^}}load_local_lo_hi_v2i16_multi_use_lo:
 ; GFX900: s_waitcnt vmcnt(0) expcnt(0) lgkmcnt(0)
 ; GFX900-NEXT: ds_read_u16 v2, v0
-; GFX900-NEXT: v_mov_b32_e32 v3, 0
-; GFX900-NEXT: s_waitcnt lgkmcnt(0)
-; GFX900-NEXT: v_mov_b32_e32 v1, v2
-; GFX900-NEXT: ds_read_u16_d16_hi v1, v0 offset:16
-; GFX900-NEXT: ds_write_b16 v3, v2
+; GFX900-DAG: v_mov_b32_e32 [[ZERO:v[0-9]+]], 0
+; GFX900-DAG: s_waitcnt lgkmcnt(0)
+; GFX900-DAG: v_mov_b32_e32 v1, v2
+; GFX900-DAG: ds_read_u16_d16_hi v1, v0 offset:16
+; GFX900: ds_write_b16 [[ZERO]], v2
 ; GFX900-NEXT: s_waitcnt lgkmcnt(1)
 ; GFX900-NEXT: v_mov_b32_e32 v0, v1
 ; GFX900-NEXT: s_waitcnt lgkmcnt(0)
@@ -27,14 +29,13 @@ entry:
 
 ; GCN-LABEL: {{^}}load_local_lo_hi_v2i16_multi_use_hi:
 ; GFX900: s_waitcnt vmcnt(0) expcnt(0) lgkmcnt(0)
-; GFX900-NEXT: ds_read_u16 v1, v0
-; GFX900-NEXT: ds_read_u16 v0, v0 offset:16
-; GFX900-NEXT: v_mov_b32_e32 v2, 0
-; GFX900-NEXT: s_waitcnt lgkmcnt(1)
-; GFX900-NEXT: v_and_b32_e32 v1, 0xffff, v1
-; GFX900-NEXT: s_waitcnt lgkmcnt(0)
-; GFX900-NEXT: ds_write_b16 v2, v0
-; GFX900-NEXT: v_lshl_or_b32 v0, v0, 16, v1
+; GFX900-DAG: ds_read_u16 [[LO:v[0-9]+]], v0
+; GFX900-DAG: ds_read_u16 [[HI:v[0-9]+]], v0 offset:16
+; GFX900-DAG: v_mov_b32_e32 [[ZERO:v[0-9]+]], 0
+; GFX900-DAG: v_and_b32_e32 [[AND:v[0-9]+]], 0xffff, [[LO]]
+; GFX900-DAG: s_waitcnt lgkmcnt(0)
+; GFX900-DAG: ds_write_b16 [[ZERO]], [[HI]]
+; GFX900: v_lshl_or_b32 [[HI]], [[HI]], 16, [[AND]]
 ; GFX900-NEXT: s_waitcnt lgkmcnt(0)
 ; GFX900-NEXT: s_setpc_b64 s[30:31]
 define <2 x i16> @load_local_lo_hi_v2i16_multi_use_hi(i16 addrspace(3)* noalias %in) #0 {

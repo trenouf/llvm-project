@@ -1,4 +1,7 @@
-; RUN: llc -mtriple=amdgcn--amdhsa -mcpu=fiji -amdgpu-spill-sgpr-to-smem=1 -verify-machineinstrs < %s | FileCheck -check-prefix=TOSMEM -check-prefix=ALL %s
+; Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
+; Notified per clause 4(b) of the license.
+; REQUIRES: disabled
+; RUN: llc -mtriple=amdgcn--amdhsa -mcpu=fiji -enable-misched=false -amdgpu-spill-sgpr-to-smem=1 -verify-machineinstrs < %s | FileCheck -check-prefix=TOSMEM -check-prefix=ALL %s
 
 ; FIXME: SGPR-to-SMEM requires an additional SGPR always to scavenge m0
 

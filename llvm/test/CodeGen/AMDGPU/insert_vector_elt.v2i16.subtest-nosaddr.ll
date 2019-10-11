@@ -1,12 +1,13 @@
+; Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
+; Notified per clause 4(b) of the license.
 ; RUN: llc -verify-machineinstrs -mtriple=amdgcn-amd-amdhsa -mcpu=fiji -enable-amdgpu-aa=0 -mattr=+flat-for-global < %s | FileCheck -enable-var-scope -check-prefixes=GCN,CIVI,VI,GFX89 %s
 ; RUN: llc -verify-machineinstrs -mtriple=amdgcn-amd-amdhsa -mcpu=hawaii -enable-amdgpu-aa=0 -mattr=+flat-for-global < %s | FileCheck -enable-var-scope -check-prefixes=GCN,CIVI,CI %s
 
 ; GCN-LABEL: {{^}}v_insertelement_v2i16_dynamic_vgpr:
 ; GFX89-DAG: s_mov_b32 [[MASKK:s[0-9]+]], 0xffff{{$}}
 ; GCN-DAG: s_mov_b32 [[K:s[0-9]+]], 0x3e703e7
-
-; GCN: {{flat|global}}_load_dword [[IDX:v[0-9]+]]
-; GCN: {{flat|global}}_load_dword [[VEC:v[0-9]+]]
+; GCN-DAG: {{flat|global}}_load_dword [[IDX:v[0-9]+]]
+; GCN-DAG: {{flat|global}}_load_dword [[VEC:v[0-9]+]]
 
 ; GFX89-DAG: v_lshlrev_b32_e32 [[SCALED_IDX:v[0-9]+]], 4, [[IDX]]
 ; GFX89-DAG: v_lshlrev_b32_e64 [[MASK:v[0-9]+]], [[SCALED_IDX]], [[MASKK]]

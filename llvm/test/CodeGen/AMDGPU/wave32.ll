@@ -1,3 +1,5 @@
+; Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
+; Notified per clause 4(b) of the license.
 ; RUN: llc -march=amdgcn -mcpu=gfx1010 -mattr=+wavefrontsize32,-wavefrontsize64 -verify-machineinstrs < %s | FileCheck -check-prefixes=GCN,GFX1032 %s
 ; RUN: llc -march=amdgcn -mcpu=gfx1010 -mattr=-wavefrontsize32,+wavefrontsize64 -verify-machineinstrs < %s | FileCheck -check-prefixes=GCN,GFX1064 %s
 ; RUN: llc -march=amdgcn -mcpu=gfx1010 -mattr=+wavefrontsize32,-wavefrontsize64 -amdgpu-early-ifcvt=1 -verify-machineinstrs < %s | FileCheck -check-prefixes=GCN,GFX1032 %s
@@ -516,14 +518,14 @@ end:
 }
 
 ; GCN-LABEL: {{^}}test_preserve_condition_undef_flag:
-; GFX1032: v_cmp_nlt_f32_e64 s{{[0-9]+}}, s{{[0-9]+}}, 1.0
-; GFX1032: v_cmp_ngt_f32_e64 s{{[0-9]+}}, s{{[0-9]+}}, 0
+; GFX1032-DAG: v_cmp_nlt_f32_e64 s{{[0-9]+}}, s{{[0-9]+}}, 1.0
+; GFX1032-DAG: v_cmp_ngt_f32_e64 s{{[0-9]+}}, s{{[0-9]+}}, 0
 ; GFX1032: v_cmp_nlt_f32_e64 s{{[0-9]+}}, s{{[0-9]+}}, 1.0
 ; GFX1032: s_or_b32 [[OR1:s[0-9]+]], s{{[0-9]+}}, s{{[0-9]+}}
 ; GFX1032: s_or_b32 [[OR2:s[0-9]+]], [[OR1]], s{{[0-9]+}}
 ; GFX1032: s_and_b32 vcc_lo, exec_lo, [[OR2]]
-; GFX1064: v_cmp_nlt_f32_e64 s[{{[0-9:]+}}], s{{[0-9]+}}, 1.0
-; GFX1064: v_cmp_ngt_f32_e64 s[{{[0-9:]+}}], s{{[0-9]+}}, 0
+; GFX1064-DAG: v_cmp_nlt_f32_e64 s[{{[0-9:]+}}], s{{[0-9]+}}, 1.0
+; GFX1064-DAG: v_cmp_ngt_f32_e64 s[{{[0-9:]+}}], s{{[0-9]+}}, 0
 ; GFX1064: v_cmp_nlt_f32_e64 s[{{[0-9:]+}}], s{{[0-9]+}}, 1.0
 ; GFX1064: s_or_b64 [[OR1:s\[[0-9:]+\]]], s[{{[0-9:]+}}], s[{{[0-9:]+}}]
 ; GFX1064: s_or_b64 [[OR2:s\[[0-9:]+\]]], [[OR1]], s[{{[0-9:]+}}]

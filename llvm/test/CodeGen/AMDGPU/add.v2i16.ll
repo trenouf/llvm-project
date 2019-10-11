@@ -1,3 +1,5 @@
+; Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
+; Notified per clause 4(b) of the license.
 ; RUN: llc -march=amdgcn -mcpu=gfx900 -mattr=-flat-for-global -verify-machineinstrs < %s | FileCheck -enable-var-scope -check-prefixes=GFX9,GCN %s
 ; RUN: llc -march=amdgcn -mcpu=tonga -mattr=-flat-for-global -verify-machineinstrs < %s | FileCheck -enable-var-scope -check-prefixes=GCN,VI %s
 
@@ -203,8 +205,8 @@ define amdgpu_kernel void @v_test_add_v2i16_zext_to_v2i32(<2 x i32> addrspace(1)
 ; GFX9: buffer_store_dwordx4
 
 ; VI-DAG: v_mov_b32_e32 v{{[0-9]+}}, 0{{$}}
-; VI: flat_load_dword v[[A:[0-9]+]]
-; VI: flat_load_dword v[[B:[0-9]+]]
+; VI-DAG: flat_load_dword v[[A:[0-9]+]]
+; VI-DAG: flat_load_dword v[[B:[0-9]+]]
 
 ; VI-DAG: v_add_u16_e32
 ; VI: v_add_u16_sdwa v[[ADD_HI:[0-9]+]], v[[A]], v[[B]] dst_sel:DWORD dst_unused:UNUSED_PAD src0_sel:WORD_1 src1_sel:WORD_1
