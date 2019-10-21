@@ -12,10 +12,10 @@ body:             |
   bb.0.entry:
     %0:sgpr_64 = COPY $sgpr0_sgpr1
     %1:sreg_64_xexec = S_LOAD_DWORDX2_IMM %0, 36, 0, 0
-    %2:sreg_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
+    %2:sgpr_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
     %3:sreg_256 = S_LOAD_DWORDX8_IMM %1, 208, 0, 0
     %4:vgpr_32 = COPY %2.sub3
-    %5:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2:sreg_128, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
+    %5:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2:sgpr_128, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
     %6:vgpr_32 = IMAGE_LOAD_V1_V4 %5:vreg_128, %3:sreg_256, 1, 0, 0, 0, 0, 0, 0, -1, 0, implicit $exec :: (dereferenceable load 4, addrspace 4)
     %7:vreg_96 = IMAGE_LOAD_V3_V4 %5:vreg_128, %3:sreg_256, 14, 0, 0, 0, 0, 0, 0, -1, 0, implicit $exec :: (dereferenceable load 12, align 16, addrspace 4)
 ...
@@ -30,10 +30,10 @@ body:             |
   bb.0.entry:
     %0:sgpr_64 = COPY $sgpr0_sgpr1
     %1:sreg_64_xexec = S_LOAD_DWORDX2_IMM %0, 36, 0, 0
-    %2:sreg_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
+    %2:sgpr_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
     %3:sreg_256 = S_LOAD_DWORDX8_IMM %1, 208, 0, 0
     %4:vgpr_32 = COPY %2.sub3
-    %5:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2:sreg_128, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
+    %5:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2:sgpr_128, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
     %6:vgpr_32 = IMAGE_LOAD_V1_V4 %5:vreg_128, %3:sreg_256, 8, 0, 0, 0, 0, 0, 0, -1, 0, implicit $exec :: (dereferenceable load 4, addrspace 4)
     %7:vreg_96 = IMAGE_LOAD_V3_V4 %5:vreg_128, %3:sreg_256, 7, 0, 0, 0, 0, 0, 0, -1, 0, implicit $exec :: (dereferenceable load 12, align 16, addrspace 4)
 ...
@@ -49,10 +49,10 @@ body:             |
   bb.0.entry:
     %0:sgpr_64 = COPY $sgpr0_sgpr1
     %1:sreg_64_xexec = S_LOAD_DWORDX2_IMM %0, 36, 0, 0
-    %2:sreg_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
+    %2:sgpr_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
     %3:sreg_256 = S_LOAD_DWORDX8_IMM %1, 208, 0, 0
     %4:vgpr_32 = COPY %2.sub3
-    %5:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2:sreg_128, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
+    %5:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2:sgpr_128, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
     %6:vreg_64 = IMAGE_LOAD_V2_V4 %5:vreg_128, %3:sreg_256, 3, 0, 0, 0, 0, 0, 0, -1, 0, implicit $exec :: (dereferenceable load 8, align 16, addrspace 4)
     %7:vreg_64 = IMAGE_LOAD_V2_V4 %5:vreg_128, %3:sreg_256, 12, 0, 0, 0, 0, 0, 0, -1, 0, implicit $exec :: (dereferenceable load 8, align 16, addrspace 4)
 ...
@@ -68,10 +68,10 @@ body:             |
   bb.0.entry:
     %0:sgpr_64 = COPY $sgpr0_sgpr1
     %1:sreg_64_xexec = S_LOAD_DWORDX2_IMM %0, 36, 0, 0
-    %2:sreg_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
+    %2:sgpr_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
     %3:sreg_256 = S_LOAD_DWORDX8_IMM %1, 208, 0, 0
     %4:vgpr_32 = COPY %2.sub3
-    %5:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2:sreg_128, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
+    %5:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2:sgpr_128, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
     %6:vreg_64 = IMAGE_LOAD_V2_V4 %5:vreg_128, %3:sreg_256, 12, 0, 0, 0, 0, 0, 0, -1, 0, implicit $exec :: (dereferenceable load 8, align 16, addrspace 4)
     %7:vreg_64 = IMAGE_LOAD_V2_V4 %5:vreg_128, %3:sreg_256, 3, 0, 0, 0, 0, 0, 0, -1, 0, implicit $exec :: (dereferenceable load 8, align 16, addrspace 4)
 ...
@@ -87,10 +87,10 @@ body:             |
   bb.0.entry:
     %0:sgpr_64 = COPY $sgpr0_sgpr1
     %1:sreg_64_xexec = S_LOAD_DWORDX2_IMM %0, 36, 0, 0
-    %2:sreg_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
+    %2:sgpr_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
     %3:sreg_256 = S_LOAD_DWORDX8_IMM %1, 208, 0, 0
     %4:vgpr_32 = COPY %2.sub3
-    %5:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2:sreg_128, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
+    %5:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2:sgpr_128, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
     %6:vreg_96 = IMAGE_LOAD_V3_V4 %5:vreg_128, %3:sreg_256, 7, 0, 0, 0, 0, 0, 0, -1, 0, implicit $exec :: (dereferenceable load 12, align 16, addrspace 4)
     %7:vgpr_32 = IMAGE_LOAD_V1_V4 %5:vreg_128, %3:sreg_256, 8, 0, 0, 0, 0, 0, 0, -1, 0, implicit $exec :: (dereferenceable load 4, addrspace 4)
 ...
@@ -106,10 +106,10 @@ body:             |
   bb.0.entry:
     %0:sgpr_64 = COPY $sgpr0_sgpr1
     %1:sreg_64_xexec = S_LOAD_DWORDX2_IMM %0, 36, 0, 0
-    %2:sreg_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
+    %2:sgpr_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
     %3:sreg_256 = S_LOAD_DWORDX8_IMM %1, 208, 0, 0
     %4:vgpr_32 = COPY %2.sub3
-    %5:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2:sreg_128, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
+    %5:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2:sgpr_128, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
     %6:vreg_96 = IMAGE_LOAD_V3_V4 %5:vreg_128, %3:sreg_256, 14, 0, 0, 0, 0, 0, 0, -1, 0, implicit $exec :: (dereferenceable load 12, align 16, addrspace 4)
     %7:vgpr_32 = IMAGE_LOAD_V1_V4 %5:vreg_128, %3:sreg_256, 1, 0, 0, 0, 0, 0, 0, -1, 0, implicit $exec :: (dereferenceable load 4, addrspace 4)
 ...
@@ -123,15 +123,15 @@ body:             |
   bb.0.entry:
     %0:sgpr_64 = COPY $sgpr0_sgpr1
     %1:sreg_64_xexec = S_LOAD_DWORDX2_IMM %0, 36, 0, 0
-    %2:sreg_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
+    %2:sgpr_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
     %3:sreg_256 = S_LOAD_DWORDX8_IMM %1, 208, 0, 0
     %4:vgpr_32 = COPY %2.sub3
-    %5:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2:sreg_128, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
+    %5:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2:sgpr_128, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
     %6:vgpr_32 = IMAGE_LOAD_V1_V4 %5:vreg_128, %3:sreg_256, 8, 0, 0, 0, 0, 0, 0, -1, 0, implicit $exec :: (dereferenceable load 4, addrspace 4)
-    %7:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2:sreg_128, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
-    %8:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2:sreg_128, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
+    %7:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2:sgpr_128, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
+    %8:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2:sgpr_128, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
     %9:vreg_96 = IMAGE_LOAD_V3_V4 %7:vreg_128, %3:sreg_256, 7, 0, 0, 0, 0, 0, 0, -1, 0, implicit $exec :: (dereferenceable load 12, align 16, addrspace 4)
-    %10:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2:sreg_128, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
+    %10:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2:sgpr_128, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
     %11:vreg_96 = IMAGE_LOAD_V3_V4 %5:vreg_128, %3:sreg_256, 7, 0, 0, 0, 0, 0, 0, -1, 0, implicit $exec :: (dereferenceable load 12, align 16, addrspace 4)
 ...
 ---
@@ -145,10 +145,10 @@ body:             |
   bb.0.entry:
     %0:sgpr_64 = COPY $sgpr0_sgpr1
     %1:sreg_64_xexec = S_LOAD_DWORDX2_IMM %0, 36, 0, 0
-    %2:sreg_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
+    %2:sgpr_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
     %3:sreg_256 = S_LOAD_DWORDX8_IMM %1, 208, 0, 0
     %4:vreg_128 = COPY %2
-    %5:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2:sreg_128, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
+    %5:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2:sgpr_128, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
     %6:vgpr_32 = IMAGE_LOAD_V1_V4 %5:vreg_128, %3:sreg_256, 8, 0, 0, 0, 0, 0, 0, -1, 0, implicit $exec :: (dereferenceable load 4, addrspace 4)
     IMAGE_STORE_V4_V4 %4:vreg_128, %5:vreg_128, %3:sreg_256, 15, -1, 0, 0, 0, 0, 0, 0, 0, implicit $exec
     %7:vreg_96 = IMAGE_LOAD_V3_V4 %5:vreg_128, %3:sreg_256, 7, 0, 0, 0, 0, 0, 0, -1, 0, implicit $exec :: (dereferenceable load 12, align 16, addrspace 4)
@@ -164,10 +164,10 @@ body:             |
   bb.0.entry:
     %0:sgpr_64 = COPY $sgpr0_sgpr1
     %1:sreg_64_xexec = S_LOAD_DWORDX2_IMM %0, 36, 0, 0
-    %2:sreg_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
+    %2:sgpr_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
     %3:sreg_256 = S_LOAD_DWORDX8_IMM %1, 208, 0, 0
     %4:vgpr_32 = COPY %2.sub3
-    %5:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2:sreg_128, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
+    %5:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2:sgpr_128, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
     %6:vgpr_32 = IMAGE_LOAD_V1_V4 %5:vreg_128, %3:sreg_256, 4, 0, 0, 0, 0, 0, 0, -1, 0, implicit $exec :: (dereferenceable load 4, addrspace 4)
     %7:vreg_96 = IMAGE_LOAD_V3_V4 %5:vreg_128, %3:sreg_256, 7, 0, 0, 0, 0, 0, 0, -1, 0, implicit $exec :: (dereferenceable load 12, align 16, addrspace 4)
 ...
@@ -182,10 +182,10 @@ body:             |
   bb.0.entry:
     %0:sgpr_64 = COPY $sgpr0_sgpr1
     %1:sreg_64_xexec = S_LOAD_DWORDX2_IMM %0, 36, 0, 0
-    %2:sreg_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
+    %2:sgpr_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
     %3:sreg_256 = S_LOAD_DWORDX8_IMM %1, 208, 0, 0
     %4:vgpr_32 = COPY %2.sub3
-    %5:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2:sreg_128, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
+    %5:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2:sgpr_128, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
     %6:vgpr_32 = IMAGE_LOAD_V1_V4 %5:vreg_128, %3:sreg_256, 4, 0, 0, 0, 0, 0, 0, -1, 0, implicit $exec :: (dereferenceable load 4, addrspace 4)
     %7:vreg_96 = IMAGE_LOAD_V3_V4 %5:vreg_128, %3:sreg_256, 11, 0, 0, 0, 0, 0, 0, -1, 0, implicit $exec :: (dereferenceable load 12, align 16, addrspace 4)
 ...
@@ -200,7 +200,7 @@ body:             |
   bb.0.entry:
     %0:sgpr_64 = COPY $sgpr0_sgpr1
     %1:sreg_64_xexec = S_LOAD_DWORDX2_IMM %0, 36, 0, 0
-    %2:sreg_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
+    %2:sgpr_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
     %3:sreg_256 = S_LOAD_DWORDX8_IMM %1, 208, 0, 0
     %4:vgpr_32 = COPY %2.sub3
     %5:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
@@ -219,7 +219,7 @@ body:             |
   bb.0.entry:
     %0:sgpr_64 = COPY $sgpr0_sgpr1
     %1:sreg_64_xexec = S_LOAD_DWORDX2_IMM %0, 36, 0, 0
-    %2:sreg_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
+    %2:sgpr_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
     %3:sreg_256 = S_LOAD_DWORDX8_IMM %1, 208, 0, 0
     %4:sreg_256 = S_LOAD_DWORDX8_IMM %1, 208, 0, 0
     %5:vgpr_32 = COPY %2.sub3
@@ -238,7 +238,7 @@ body:             |
   bb.0.entry:
     %0:sgpr_64 = COPY $sgpr0_sgpr1
     %1:sreg_64_xexec = S_LOAD_DWORDX2_IMM %0, 36, 0, 0
-    %2:sreg_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
+    %2:sgpr_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
     %3:sreg_256 = S_LOAD_DWORDX8_IMM %1, 208, 0, 0
     %4:vgpr_32 = COPY %2.sub3
     %5:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
@@ -256,7 +256,7 @@ body:             |
   bb.0.entry:
     %0:sgpr_64 = COPY $sgpr0_sgpr1
     %1:sreg_64_xexec = S_LOAD_DWORDX2_IMM %0, 36, 0, 0
-    %2:sreg_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
+    %2:sgpr_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
     %3:sreg_256 = S_LOAD_DWORDX8_IMM %1, 208, 0, 0
     %4:vgpr_32 = COPY %2.sub3
     %5:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
@@ -274,7 +274,7 @@ body:             |
   bb.0.entry:
     %0:sgpr_64 = COPY $sgpr0_sgpr1
     %1:sreg_64_xexec = S_LOAD_DWORDX2_IMM %0, 36, 0, 0
-    %2:sreg_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
+    %2:sgpr_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
     %3:sreg_256 = S_LOAD_DWORDX8_IMM %1, 208, 0, 0
     %4:vgpr_32 = COPY %2.sub3
     %5:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
@@ -292,7 +292,7 @@ body:             |
   bb.0.entry:
     %0:sgpr_64 = COPY $sgpr0_sgpr1
     %1:sreg_64_xexec = S_LOAD_DWORDX2_IMM %0, 36, 0, 0
-    %2:sreg_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
+    %2:sgpr_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
     %3:sreg_256 = S_LOAD_DWORDX8_IMM %1, 208, 0, 0
     %4:vgpr_32 = COPY %2.sub3
     %5:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
@@ -310,7 +310,7 @@ body:             |
   bb.0.entry:
     %0:sgpr_64 = COPY $sgpr0_sgpr1
     %1:sreg_64_xexec = S_LOAD_DWORDX2_IMM %0, 36, 0, 0
-    %2:sreg_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
+    %2:sgpr_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
     %3:sreg_256 = S_LOAD_DWORDX8_IMM %1, 208, 0, 0
     %4:vgpr_32 = COPY %2.sub3
     %5:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
@@ -328,7 +328,7 @@ body:             |
   bb.0.entry:
     %0:sgpr_64 = COPY $sgpr0_sgpr1
     %1:sreg_64_xexec = S_LOAD_DWORDX2_IMM %0, 36, 0, 0
-    %2:sreg_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
+    %2:sgpr_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
     %3:sreg_256 = S_LOAD_DWORDX8_IMM %1, 208, 0, 0
     %4:vgpr_32 = COPY %2.sub3
     %5:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
@@ -346,7 +346,7 @@ body:             |
   bb.0.entry:
     %0:sgpr_64 = COPY $sgpr0_sgpr1
     %1:sreg_64_xexec = S_LOAD_DWORDX2_IMM %0, 36, 0, 0
-    %2:sreg_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
+    %2:sgpr_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
     %3:sreg_256 = S_LOAD_DWORDX8_IMM %1, 208, 0, 0
     %4:vgpr_32 = COPY %2.sub3
     %5:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
@@ -364,7 +364,7 @@ body:             |
   bb.0.entry:
     %0:sgpr_64 = COPY $sgpr0_sgpr1
     %1:sreg_64_xexec = S_LOAD_DWORDX2_IMM %0, 36, 0, 0
-    %2:sreg_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
+    %2:sgpr_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
     %3:sreg_256 = S_LOAD_DWORDX8_IMM %1, 208, 0, 0
     %4:vgpr_32 = COPY %2.sub3
     %5:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
@@ -383,10 +383,10 @@ body:             |
   bb.0.entry:
     %0:sgpr_64 = COPY $sgpr0_sgpr1
     %1:sreg_64_xexec = S_LOAD_DWORDX2_IMM %0, 36, 0, 0
-    %2:sreg_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
+    %2:sgpr_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
     %3:sreg_256 = S_LOAD_DWORDX8_IMM %1, 208, 0, 0
     %4:vgpr_32 = COPY %2.sub3
-    %5:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2:sreg_128, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
+    %5:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2:sgpr_128, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
     %6:vgpr_32 = IMAGE_LOAD_MIP_V1_V4 %5:vreg_128, %3:sreg_256, 1, 0, 0, 0, 0, 0, 0, -1, 0, implicit $exec :: (dereferenceable load 4, addrspace 4)
     %7:vreg_96 = IMAGE_LOAD_MIP_V3_V4 %5:vreg_128, %3:sreg_256, 14, 0, 0, 0, 0, 0, 0, -1, 0, implicit $exec :: (dereferenceable load 12, align 16, addrspace 4)
 ...
@@ -404,10 +404,10 @@ body:             |
   bb.0.entry:
     %0:sgpr_64 = COPY $sgpr0_sgpr1
     %1:sreg_64_xexec = S_LOAD_DWORDX2_IMM %0, 36, 0, 0
-    %2:sreg_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
+    %2:sgpr_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
     %3:sreg_256 = S_LOAD_DWORDX8_IMM %1, 208, 0, 0
     %4:vgpr_32 = COPY %2.sub3
-    %5:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2:sreg_128, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
+    %5:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2:sgpr_128, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
     %6:vgpr_32 = IMAGE_LOAD_MIP_PCK_V1_V4 %5:vreg_128, %3:sreg_256, 1, 0, 0, 0, 0, 0, 0, -1, implicit $exec :: (dereferenceable load 4, addrspace 4)
     %7:vreg_96 = IMAGE_LOAD_MIP_PCK_V3_V4 %5:vreg_128, %3:sreg_256, 14, 0, 0, 0, 0, 0, 0, -1, implicit $exec :: (dereferenceable load 12, align 16, addrspace 4)
 ...
@@ -425,10 +425,10 @@ body:             |
   bb.0.entry:
     %0:sgpr_64 = COPY $sgpr0_sgpr1
     %1:sreg_64_xexec = S_LOAD_DWORDX2_IMM %0, 36, 0, 0
-    %2:sreg_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
+    %2:sgpr_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
     %3:sreg_256 = S_LOAD_DWORDX8_IMM %1, 208, 0, 0
     %4:vgpr_32 = COPY %2.sub3
-    %5:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2:sreg_128, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
+    %5:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2:sgpr_128, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
     %6:vgpr_32 = IMAGE_LOAD_MIP_PCK_SGN_V1_V4 %5:vreg_128, %3:sreg_256, 1, 0, 0, 0, 0, 0, 0, -1, implicit $exec :: (dereferenceable load 4, addrspace 4)
     %7:vreg_96 = IMAGE_LOAD_MIP_PCK_SGN_V3_V4 %5:vreg_128, %3:sreg_256, 14, 0, 0, 0, 0, 0, 0, -1, implicit $exec :: (dereferenceable load 12, align 16, addrspace 4)
 ...
@@ -444,10 +444,10 @@ body:             |
   bb.0.entry:
     %0:sgpr_64 = COPY $sgpr0_sgpr1
     %1:sreg_64_xexec = S_LOAD_DWORDX2_IMM %0, 36, 0, 0
-    %2:sreg_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
+    %2:sgpr_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
     %3:sreg_256 = S_LOAD_DWORDX8_IMM %1, 208, 0, 0
     %4:vgpr_32 = COPY %2.sub3
-    %5:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2:sreg_128, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
+    %5:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2:sgpr_128, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
     %6:vgpr_32 = IMAGE_LOAD_PCK_V1_V4 %5:vreg_128, %3:sreg_256, 1, 0, 0, 0, 0, 0, 0, -1, implicit $exec :: (dereferenceable load 4, addrspace 4)
     %7:vreg_96 = IMAGE_LOAD_PCK_V3_V4 %5:vreg_128, %3:sreg_256, 14, 0, 0, 0, 0, 0, 0, -1, implicit $exec :: (dereferenceable load 12, align 16, addrspace 4)
 ...
@@ -463,10 +463,10 @@ body:             |
   bb.0.entry:
     %0:sgpr_64 = COPY $sgpr0_sgpr1
     %1:sreg_64_xexec = S_LOAD_DWORDX2_IMM %0, 36, 0, 0
-    %2:sreg_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
+    %2:sgpr_128 = COPY $sgpr96_sgpr97_sgpr98_sgpr99
     %3:sreg_256 = S_LOAD_DWORDX8_IMM %1, 208, 0, 0
     %4:vgpr_32 = COPY %2.sub3
-    %5:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2:sreg_128, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
+    %5:vreg_128 = BUFFER_LOAD_DWORDX4_OFFSET %2:sgpr_128, 0, 0, 0, 0, 0, 0, 0, implicit $exec :: (dereferenceable invariant load 16)
     %6:vgpr_32 = IMAGE_LOAD_PCK_SGN_V1_V4 %5:vreg_128, %3:sreg_256, 1, 0, 0, 0, 0, 0, 0, -1, implicit $exec :: (dereferenceable load 4, addrspace 4)
     %7:vreg_96 = IMAGE_LOAD_PCK_SGN_V3_V4 %5:vreg_128, %3:sreg_256, 14, 0, 0, 0, 0, 0, 0, -1, implicit $exec :: (dereferenceable load 12, align 16, addrspace 4)
 ...
