@@ -241,7 +241,6 @@ define amdgpu_kernel void @test_copy_v4i8_extra_use(<4 x i8> addrspace(1)* %out0
 ; SI-NEXT:    buffer_load_dword v0, v[0:1], s[8:11], 0 addr64
 ; SI-NEXT:    s_mov_b32 s12, 0xff00
 ; SI-NEXT:    s_movk_i32 s13, 0xff
-; SI-NEXT:    s_movk_i32 s14, 0x900
 ; SI-NEXT:    s_mov_b32 s2, -1
 ; SI-NEXT:    s_mov_b32 s0, s6
 ; SI-NEXT:    s_mov_b32 s1, s7
@@ -256,7 +255,7 @@ define amdgpu_kernel void @test_copy_v4i8_extra_use(<4 x i8> addrspace(1)* %out0
 ; SI-NEXT:    v_and_b32_e32 v3, s13, v3
 ; SI-NEXT:    v_or_b32_e32 v2, v2, v3
 ; SI-NEXT:    v_and_b32_e32 v1, s13, v1
-; SI-NEXT:    v_add_i32_e32 v2, vcc, s14, v2
+; SI-NEXT:    v_add_i32_e32 v2, vcc, 0x900, v2
 ; SI-NEXT:    v_or_b32_e32 v1, v4, v1
 ; SI-NEXT:    v_and_b32_e32 v2, 0xffff, v2
 ; SI-NEXT:    v_lshlrev_b32_e32 v1, 16, v1
@@ -328,7 +327,6 @@ define amdgpu_kernel void @test_copy_v4i8_x2_extra_use(<4 x i8> addrspace(1)* %o
 ; SI-NEXT:    s_mov_b32 s9, s5
 ; SI-NEXT:    s_mov_b32 s4, 0xff00
 ; SI-NEXT:    s_movk_i32 s5, 0xff
-; SI-NEXT:    s_movk_i32 s6, 0x900
 ; SI-NEXT:    s_mov_b32 s10, -1
 ; SI-NEXT:    s_mov_b32 s12, s2
 ; SI-NEXT:    s_mov_b32 s13, s3
@@ -345,7 +343,7 @@ define amdgpu_kernel void @test_copy_v4i8_x2_extra_use(<4 x i8> addrspace(1)* %o
 ; SI-NEXT:    v_and_b32_e32 v3, s5, v3
 ; SI-NEXT:    v_or_b32_e32 v2, v2, v3
 ; SI-NEXT:    v_and_b32_e32 v1, s5, v1
-; SI-NEXT:    v_add_i32_e32 v2, vcc, s6, v2
+; SI-NEXT:    v_add_i32_e32 v2, vcc, 0x900, v2
 ; SI-NEXT:    v_or_b32_e32 v1, v4, v1
 ; SI-NEXT:    v_and_b32_e32 v2, 0xffff, v2
 ; SI-NEXT:    v_lshlrev_b32_e32 v1, 16, v1

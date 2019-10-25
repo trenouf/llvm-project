@@ -3,8 +3,6 @@
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-// Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
-// Notified per clause 4(b) of the license.
 //
 //===----------------------------------------------------------------------===//
 //
@@ -71,7 +69,6 @@
 #include "SIInstrInfo.h"
 #include "SIRegisterInfo.h"
 #include "MCTargetDesc/AMDGPUMCTargetDesc.h"
-#include "Utils/AMDGPUMCUtils.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallSet.h"
@@ -407,67 +404,6 @@ static bool isReachable(const MachineInstr *From,
            (const MachineBasicBlock *MBB) { return MBB == MBBFrom; });
 }
 
-// Writelane is special in that it can use SGPR and M0 (which would normally
-// count as using the constant bus twice - but in this case it is allowed as the
-// lane selector doesn't count as a use of the constant bus).
-// However, it is still required to abide by the 1 SGPR rule
-// Apply a fix here as we might have multiple SGPRs after legalizing VGPRs to
-// SGPRs
-static bool fixWriteLane(MachineFunction &MF) {
-  const GCNSubtarget &ST = MF.getSubtarget<GCNSubtarget>();
-  const MachineRegisterInfo &MRI = MF.getRegInfo();
-  const SIRegisterInfo *TRI = ST.getRegisterInfo();
-  const SIInstrInfo *TII = ST.getInstrInfo();
-  bool Changed = false;
-
-  for (MachineFunction::iterator BI = MF.begin(), BE = MF.end();
-                                                  BI != BE; ++BI) {
-    MachineBasicBlock &MBB = *BI;
-    for (MachineBasicBlock::iterator I = MBB.begin(), E = MBB.end();
-         I != E; ++I) {
-      MachineInstr &MI = *I;
-
-      if (MI.getOpcode() == AMDGPU::V_WRITELANE_B32) {
-        int Src0Idx = AMDGPU::getNamedOperandIdx(MI.getOpcode(), AMDGPU::OpName::src0);
-        int Src1Idx = AMDGPU::getNamedOperandIdx(MI.getOpcode(), AMDGPU::OpName::src1);
-        MachineOperand &Src0 = MI.getOperand(Src0Idx);
-        MachineOperand &Src1 = MI.getOperand(Src1Idx);
-
-        // Check to see if the instruction violates the 1 SGPR rule
-        if ((Src0.isReg() && TRI->isSGPRReg(MRI, Src0.getReg()) && Src0.getReg() != AMDGPU::M0) &&
-            (Src1.isReg() && TRI->isSGPRReg(MRI, Src1.getReg()) && Src1.getReg() != AMDGPU::M0)) {
-
-          // Check for trivially easy constant prop into one of the operands
-          // If this is the case then perform the operation now to resolve SGPR
-          // issue
-          bool Resolved = false;
-          std::vector<MachineOperand*> MOs { &Src0, &Src1 };
-          for (auto MO : MOs ) {
-            auto Imm = AMDGPU::foldToImm(*MO, &MRI, TII);
-            if (Imm && TII->isInlineConstant(APInt(64, *Imm, true))) {
-              MO->ChangeToImmediate(*Imm);
-              Changed = true;
-              Resolved = true;
-              break;
-            }
-          }
-
-          if (!Resolved) {
-            // Haven't managed to resolve by replacing an SGPR with an immediate
-            // Move src1 to be in M0
-            BuildMI(*MI.getParent(), MI, MI.getDebugLoc(), TII->get(AMDGPU::S_MOV_B32), AMDGPU::M0)
-              .add(Src1);
-            Src1.ChangeToRegister(AMDGPU::M0, false);
-            Changed = true;
-          }
-        }
-      }
-    }
-  }
-
-  return Changed;
-}
-
 // Return the first non-prologue instruction in the block.
 static MachineBasicBlock::iterator
 getFirstNonPrologue(MachineBasicBlock *MBB, const TargetInstrInfo *TII) {
@@ -748,11 +684,70 @@ bool SIFixSGPRCopies::runOnMachineFunction(MachineFunction &MF) {
         }
         break;
       }
+      case AMDGPU::V_WRITELANE_B32: {
+        // Some architectures allow more than one constant bus access without
+        // SGPR restriction
+        if (ST.getConstantBusLimit(MI.getOpcode()) != 1)
+          break;
+
+        // Writelane is special in that it can use SGPR and M0 (which would
+        // normally count as using the constant bus twice - but in this case it
+        // is allowed since the lane selector doesn't count as a use of the
+        // constant bus). However, it is still required to abide by the 1 SGPR
+        // rule. Apply a fix here as we might have multiple SGPRs after
+        // legalizing VGPRs to SGPRs
+        int Src0Idx =
+            AMDGPU::getNamedOperandIdx(MI.getOpcode(), AMDGPU::OpName::src0);
+        int Src1Idx =
+            AMDGPU::getNamedOperandIdx(MI.getOpcode(), AMDGPU::OpName::src1);
+        MachineOperand &Src0 = MI.getOperand(Src0Idx);
+        MachineOperand &Src1 = MI.getOperand(Src1Idx);
+
+        // Check to see if the instruction violates the 1 SGPR rule
+        if ((Src0.isReg() && TRI->isSGPRReg(*MRI, Src0.getReg()) &&
+             Src0.getReg() != AMDGPU::M0) &&
+            (Src1.isReg() && TRI->isSGPRReg(*MRI, Src1.getReg()) &&
+             Src1.getReg() != AMDGPU::M0)) {
+
+          // Check for trivially easy constant prop into one of the operands
+          // If this is the case then perform the operation now to resolve SGPR
+          // issue. If we don't do that here we will always insert a mov to m0
+          // that can't be resolved in later operand folding pass
+          bool Resolved = false;
+          for (MachineOperand *MO : {&Src0, &Src1}) {
+            if (Register::isVirtualRegister(MO->getReg())) {
+              MachineInstr *DefMI = MRI->getVRegDef(MO->getReg());
+              if (DefMI && TII->isFoldableCopy(*DefMI)) {
+                const MachineOperand &Def = DefMI->getOperand(0);
+                if (Def.isReg() &&
+                    MO->getReg() == Def.getReg() &&
+                    MO->getSubReg() == Def.getSubReg()) {
+                  const MachineOperand &Copied = DefMI->getOperand(1);
+                  if (Copied.isImm() &&
+                      TII->isInlineConstant(APInt(64, Copied.getImm(), true))) {
+                    MO->ChangeToImmediate(Copied.getImm());
+                    Resolved = true;
+                    break;
+                  }
+                }
+              }
+            }
+          }
+
+          if (!Resolved) {
+            // Haven't managed to resolve by replacing an SGPR with an immediate
+            // Move src1 to be in M0
+            BuildMI(*MI.getParent(), MI, MI.getDebugLoc(),
+                    TII->get(AMDGPU::COPY), AMDGPU::M0)
+                .add(Src1);
+            Src1.ChangeToRegister(AMDGPU::M0, false);
+          }
+        }
+        break;
+      }
       }
     }
   }
-
-  fixWriteLane(MF);
 
   if (MF.getTarget().getOptLevel() > CodeGenOpt::None && EnableM0Merge)
     hoistAndMergeSGPRInits(AMDGPU::M0, *MRI, TRI, *MDT, TII);
@@ -762,20 +757,28 @@ bool SIFixSGPRCopies::runOnMachineFunction(MachineFunction &MF) {
 
 void SIFixSGPRCopies::processPHINode(MachineInstr &MI) {
   unsigned numVGPRUses = 0;
+  bool AllAGPRUses = true;
   SetVector<const MachineInstr *> worklist;
+  SmallSet<const MachineInstr *, 4> Visited;
   worklist.insert(&MI);
+  Visited.insert(&MI);
   while (!worklist.empty()) {
     const MachineInstr *Instr = worklist.pop_back_val();
     unsigned Reg = Instr->getOperand(0).getReg();
     for (const auto &Use : MRI->use_operands(Reg)) {
       const MachineInstr *UseMI = Use.getParent();
+      AllAGPRUses &= (UseMI->isCopy() &&
+                      TRI->isAGPR(*MRI, UseMI->getOperand(0).getReg())) ||
+                     TRI->isAGPR(*MRI, Use.getReg());
       if (UseMI->isCopy() || UseMI->isRegSequence()) {
         if (UseMI->isCopy() &&
           UseMI->getOperand(0).getReg().isPhysical() &&
           !TRI->isSGPRReg(*MRI, UseMI->getOperand(0).getReg())) {
           numVGPRUses++;
         }
-        worklist.insert(UseMI);
+        if (Visited.insert(UseMI).second)
+          worklist.insert(UseMI);
+
         continue;
       }
 
@@ -795,11 +798,19 @@ void SIFixSGPRCopies::processPHINode(MachineInstr &MI) {
       }
     }
   }
+
+  Register PHIRes = MI.getOperand(0).getReg();
+  const TargetRegisterClass *RC0 = MRI->getRegClass(PHIRes);
+  if (AllAGPRUses && numVGPRUses && !TRI->hasAGPRs(RC0)) {
+    LLVM_DEBUG(dbgs() << "Moving PHI to AGPR: " << MI);
+    MRI->setRegClass(PHIRes, TRI->getEquivalentAGPRClass(RC0));
+  }
+
   bool hasVGPRInput = false;
   for (unsigned i = 1; i < MI.getNumOperands(); i += 2) {
     unsigned InputReg = MI.getOperand(i).getReg();
     MachineInstr *Def = MRI->getVRegDef(InputReg);
-    if (TRI->isVGPR(*MRI, InputReg)) {
+    if (TRI->isVectorRegister(*MRI, InputReg)) {
       if (Def->isCopy()) {
         unsigned SrcReg = Def->getOperand(1).getReg();
         const TargetRegisterClass *RC =
@@ -811,15 +822,14 @@ void SIFixSGPRCopies::processPHINode(MachineInstr &MI) {
       break;
     }
     else if (Def->isCopy() &&
-      TRI->isVGPR(*MRI, Def->getOperand(1).getReg())) {
+      TRI->isVectorRegister(*MRI, Def->getOperand(1).getReg())) {
       hasVGPRInput = true;
       break;
     }
   }
-  unsigned PHIRes = MI.getOperand(0).getReg();
-  const TargetRegisterClass *RC0 = MRI->getRegClass(PHIRes);
 
-  if ((!TRI->isVGPR(*MRI, PHIRes) && RC0 != &AMDGPU::VReg_1RegClass) &&
+  if ((!TRI->isVectorRegister(*MRI, PHIRes) &&
+       RC0 != &AMDGPU::VReg_1RegClass) &&
     (hasVGPRInput || numVGPRUses > 1)) {
     LLVM_DEBUG(dbgs() << "Fixing PHI: " << MI);
     TII->moveToVALU(MI);

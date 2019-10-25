@@ -3,8 +3,6 @@
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-// Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
-// Notified per clause 4(b) of the license.
 //
 //===----------------------------------------------------------------------===//
 //
@@ -323,7 +321,8 @@ static InstClassEnum getInstClass(unsigned Opc, const SIInstrInfo &TII) {
       // Ignore instructions encoded without vaddr.
       if (AMDGPU::getNamedOperandIdx(Opc, AMDGPU::OpName::vaddr) == -1)
         return UNKNOWN;
-      if (!TII.get(Opc).mayLoad() || TII.isGather4(Opc))
+      // TODO: Support IMAGE_GET_RESINFO and IMAGE_GET_LOD.
+      if (TII.get(Opc).mayStore() || !TII.get(Opc).mayLoad() || TII.isGather4(Opc))
         return UNKNOWN;
       return MIMG;
     }
@@ -1050,7 +1049,10 @@ SILoadStoreOptimizer::mergeImagePair(CombineInfo &CI) {
 
   auto MIB = BuildMI(*MBB, CI.Paired, DL, TII->get(Opcode), DestReg);
   for (unsigned I = 1, E = (*CI.I).getNumOperands(); I != E; ++I) {
-    (I == DMaskIdx) ? MIB.addImm(MergedDMask) : MIB.add((*CI.I).getOperand(I));
+    if (I == DMaskIdx)
+      MIB.addImm(MergedDMask);
+    else
+      MIB.add((*CI.I).getOperand(I));
   }
 
   // It shouldn't be possible to get this far if the two instructions

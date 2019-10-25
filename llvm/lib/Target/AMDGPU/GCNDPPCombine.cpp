@@ -3,6 +3,8 @@
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+// Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
+// Notified per clause 4(b) of the license.
 //
 //===----------------------------------------------------------------------===//
 // The pass combines V_MOV_B32_dpp instruction with its VALU uses as a DPP src0
@@ -354,6 +356,10 @@ bool GCNDPPCombine::combineDPPMov(MachineInstr &MovMI) const {
   auto *DstOpnd = TII->getNamedOperand(MovMI, AMDGPU::OpName::vdst);
   assert(DstOpnd && DstOpnd->isReg());
   auto DPPMovReg = DstOpnd->getReg();
+  if (DPPMovReg.isPhysical()) {
+    LLVM_DEBUG(dbgs() << "  failed: dpp move writes physreg\n");
+    return false;
+  }
   if (execMayBeModifiedBeforeAnyUse(*MRI, DPPMovReg, MovMI)) {
     LLVM_DEBUG(dbgs() << "  failed: EXEC mask should remain the same"
                          " for all uses\n");
@@ -372,7 +378,13 @@ bool GCNDPPCombine::combineDPPMov(MachineInstr &MovMI) const {
   bool BoundCtrlZero = BCZOpnd->getImm();
 
   auto *OldOpnd = TII->getNamedOperand(MovMI, AMDGPU::OpName::old);
+  auto *SrcOpnd = TII->getNamedOperand(MovMI, AMDGPU::OpName::src0);
   assert(OldOpnd && OldOpnd->isReg());
+  assert(SrcOpnd && SrcOpnd->isReg());
+  if (OldOpnd->getReg().isPhysical() || SrcOpnd->getReg().isPhysical()) {
+    LLVM_DEBUG(dbgs() << "  failed: dpp move reads physreg\n");
+    return false;
+  }
 
   auto * const OldOpndValue = getOldOpndValue(*OldOpnd);
   // OldOpndValue is either undef (IMPLICIT_DEF) or immediate or something else
@@ -508,6 +520,13 @@ bool GCNDPPCombine::runOnMachineFunction(MachineFunction &MF) {
       if (MI.getOpcode() == AMDGPU::V_MOV_B32_dpp && combineDPPMov(MI)) {
         Changed = true;
         ++NumDPPMovsCombined;
+      } else if (MI.getOpcode() == AMDGPU::V_MOV_B64_DPP_PSEUDO) {
+        auto Split = TII->expandMovDPP64(MI);
+        for (auto M : { Split.first, Split.second }) {
+          if (combineDPPMov(*M))
+            ++NumDPPMovsCombined;
+        }
+        Changed = true;
       }
     }
   }
