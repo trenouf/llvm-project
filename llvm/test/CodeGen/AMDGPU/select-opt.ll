@@ -1,3 +1,5 @@
+; Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
+; Notified per clause 4(b) of the license.
 ; RUN: llc -march=amdgcn -verify-machineinstrs < %s | FileCheck -check-prefix=GCN %s
 
 ; Make sure to test with f32 and i32 compares. If we have to use float
@@ -135,8 +137,8 @@ define amdgpu_kernel void @opt_select_i64_or_cmp_f32(i64 addrspace(1)* %out, flo
 
 ; GCN-LABEL: {{^}}regression:
 ; GCN: v_cmp_neq_f32_e64 s{{\[[0-9]+:[0-9]+\]}}, s{{[0-9]+}}, 1.0
-; GCN: v_cmp_neq_f32_e64 s{{\[[0-9]+:[0-9]+\]}}, s{{[0-9]+}}, 0
-; GCN: v_cmp_eq_f32_e64 s{{\[[0-9]+:[0-9]+\]}}, s{{[0-9]+}}, 0
+; GCN: v_cmp_neq_f32_e32 vcc, 0, v{{[0-9]+}}
+; GCN: v_cmp_eq_f32_e32 vcc, 0, v{{[0-9]+}}
 
 define amdgpu_kernel void @regression(float addrspace(1)* %out, float %c0, float %c1) #0 {
 entry:

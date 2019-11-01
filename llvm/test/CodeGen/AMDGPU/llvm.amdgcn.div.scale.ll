@@ -1,3 +1,5 @@
+; Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
+; Notified per clause 4(b) of the license.
 ; RUN: llc -march=amdgcn -verify-machineinstrs < %s | FileCheck -enable-var-scope -check-prefix=SI %s
 
 declare i32 @llvm.amdgcn.workitem.id.x() #1
@@ -387,7 +389,7 @@ define amdgpu_kernel void @test_div_scale_f32_undef_val_val(float addrspace(1)* 
 
 ; SI-LABEL: {{^}}test_div_scale_f32_undef_undef_val:
 ; SI-NOT: v0
-; SI: v_div_scale_f32 v{{[0-9]+}}, s{{\[[0-9]+:[0-9]+\]}}, s0, s0, v0
+; SI: v_div_scale_f32 v{{[0-9]+}}, s{{\[[0-9]+:[0-9]+\]}}, v0, v0, v0
 define amdgpu_kernel void @test_div_scale_f32_undef_undef_val(float addrspace(1)* %out) #0 {
   %result = call { float, i1 } @llvm.amdgcn.div.scale.f32(float undef, float undef, i1 false)
   %result0 = extractvalue { float, i1 } %result, 0

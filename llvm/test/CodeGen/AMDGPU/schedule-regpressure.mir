@@ -1,3 +1,5 @@
+# Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
+# Notified per clause 4(b) of the license.
 # RUN: llc -march=amdgcn -misched=converge -run-pass machine-scheduler %s -o - -debug-only=machine-scheduler 2>&1 | FileCheck %s
 # REQUIRES: asserts
 
@@ -17,7 +19,7 @@ regBankSelected: false
 selected:        false
 tracksRegLiveness: true
 registers:
-  - { id: 0, class: sgpr_128 }
+  - { id: 0, class: sreg_128 }
   - { id: 1, class: sgpr_64 }
   - { id: 2, class: sreg_32_xm0 }
   - { id: 3, class: sgpr_32 }

@@ -1,3 +1,5 @@
+# Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
+# Notified per clause 4(b) of the license.
 # RUN: llc --mtriple=amdgcn--amdhsa -mcpu=fiji -verify-machineinstrs -run-pass si-fold-operands,si-shrink-instructions %s -o - | FileCheck %s
 --- |
   define amdgpu_kernel void @test() #0 {
@@ -25,7 +27,7 @@ registers:
   - { id: 2, class: vgpr_32 }
   - { id: 3, class: sreg_32 }
   - { id: 4, class: vgpr_32 }
-  - { id: 5, class: sgpr_128 }
+  - { id: 5, class: sreg_128 }
 body:             |
   bb.0 (%ir-block.0):
     %0 = IMPLICIT_DEF

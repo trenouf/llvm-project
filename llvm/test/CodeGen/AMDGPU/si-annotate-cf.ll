@@ -1,3 +1,5 @@
+; Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
+; Notified per clause 4(b) of the license.
 ; RUN: llc < %s -march=amdgcn -mcpu=verde -verify-machineinstrs | FileCheck --check-prefix=SI --check-prefix=FUNC %s
 ; RUN: llc < %s -march=amdgcn -mcpu=tonga -mattr=-flat-for-global -verify-machineinstrs | FileCheck --check-prefix=SI --check-prefix=FUNC %s
 
@@ -33,6 +35,7 @@ ENDIF:
 
 ; SI: ; %else
 ; SI:     v_cmp_eq_u32_e64  [[TMP:s\[[0-9]+:[0-9]+\]]],
+; SI:     s_and_b64         [[PHI]], [[TMP]], exec
 
 ; SI: ; %endif
 

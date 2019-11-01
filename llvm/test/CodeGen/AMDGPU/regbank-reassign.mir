@@ -1,3 +1,5 @@
+# Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
+# Notified per clause 4(b) of the license.
 # RUN: llc -march=amdgcn -mcpu=gfx1010 -verify-machineinstrs -run-pass greedy,amdgpu-regbanks-reassign,virtregrewriter -o - %s | FileCheck -check-prefix=GCN %s
 
 # GCN-LABEL: v1_vs_v5{{$}}
@@ -325,7 +327,7 @@ body: |
 name:          smem_bundle
 tracksRegLiveness: true
 registers:
-  - { id: 0, class: sgpr_128, preferred-register: '$sgpr0_sgpr1_sgpr2_sgpr3' }
+  - { id: 0, class: sreg_128, preferred-register: '$sgpr0_sgpr1_sgpr2_sgpr3' }
   - { id: 1, class: sreg_32_xm0_xexec, preferred-register: '$sgpr16' }
   - { id: 2, class: sreg_32_xm0_xexec, preferred-register: '$sgpr17' }
   - { id: 3, class: sreg_32_xm0_xexec, preferred-register: '$sgpr4' }

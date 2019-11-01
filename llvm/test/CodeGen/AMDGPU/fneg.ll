@@ -1,3 +1,5 @@
+; Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
+; Notified per clause 4(b) of the license.
 ; RUN: llc -march=amdgcn -mcpu=tahiti -verify-machineinstrs < %s | FileCheck -enable-var-scope -check-prefix=SI -check-prefix=GCN -check-prefix=FUNC %s
 ; RUN: llc -march=amdgcn -mcpu=tonga -mattr=-flat-for-global -verify-machineinstrs < %s | FileCheck -enable-var-scope -check-prefix=VI -check-prefix=GCN -check-prefix=FUNC %s
 ; RUN: llc -march=r600 -mcpu=redwood < %s | FileCheck -enable-var-scope -check-prefix=R600 -check-prefix=FUNC %s
@@ -19,8 +21,8 @@ define amdgpu_kernel void @s_fneg_f32(float addrspace(1)* %out, float %in) {
 ; R600: -PV
 
 ; GCN: s_brev_b32 [[SIGNBIT:s[0-9]+]], 1
-; GCN: s_xor_b32
-; GCN: s_xor_b32
+; GCN: v_xor_b32
+; GCN: v_xor_b32
 define amdgpu_kernel void @s_fneg_v2f32(<2 x float> addrspace(1)* nocapture %out, <2 x float> %in) {
   %fneg = fsub <2 x float> <float -0.000000e+00, float -0.000000e+00>, %in
   store <2 x float> %fneg, <2 x float> addrspace(1)* %out
@@ -33,10 +35,10 @@ define amdgpu_kernel void @s_fneg_v2f32(<2 x float> addrspace(1)* nocapture %out
 ; R600: -PV
 ; R600: -PV
 
-; GCN: s_xor_b32
-; GCN: s_xor_b32
-; GCN: s_xor_b32
-; GCN: s_xor_b32
+; GCN: v_xor_b32
+; GCN: v_xor_b32
+; GCN: v_xor_b32
+; GCN: v_xor_b32
 define amdgpu_kernel void @s_fneg_v4f32(<4 x float> addrspace(1)* nocapture %out, <4 x float> %in) {
   %fneg = fsub <4 x float> <float -0.000000e+00, float -0.000000e+00, float -0.000000e+00, float -0.000000e+00>, %in
   store <4 x float> %fneg, <4 x float> addrspace(1)* %out

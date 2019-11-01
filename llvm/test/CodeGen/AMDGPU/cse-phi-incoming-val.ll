@@ -1,3 +1,5 @@
+; Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
+; Notified per clause 4(b) of the license.
 ; RUN: llc < %s -mtriple=amdgcn--amdpal -mcpu=gfx900 -verify-machineinstrs | FileCheck %s
 
 ; Check that the redundant immediate MOV instruction
@@ -5,11 +7,10 @@
 ; in the generated code.
 
 ; CHECK-LABEL: {{^}}mov_opt:
-; CHECK: s_mov_b32 [[SREG:s[0-9]+]], 1.0
+; CHECK: v_mov_b32_e32 {{v[0-9]+}}, 1.0
 ; CHECK: %bb.1:
 ; CHECK-NOT: v_mov_b32_e32 {{v[0-9]+}}, 1.0
-; CHECK: BB0_4:
-; CHECK: v_mov_b32_e32 v{{[0-9]+}}, [[SREG]]
+; CHECK: BB0_2:
 
 define amdgpu_ps void @mov_opt(i32 %arg, i32 inreg %arg1, i32 inreg %arg2) local_unnamed_addr #0 {
 bb:

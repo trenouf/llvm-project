@@ -1,3 +1,5 @@
+# Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
+# Notified per clause 4(b) of the license.
 # RUN: llc -march=amdgcn -run-pass si-fix-sgpr-copies %s -o - | FileCheck %s -check-prefixes=GCN
 
 ---
@@ -16,7 +18,7 @@ registers:
 
 body: |
   ; GCN-LABEL: name: phi_visit_order
-  ; GCN: S_ADD_I32
+  ; GCN: V_ADD_I32
   bb.0:
     liveins: $vgpr0
     %7 = COPY $vgpr0

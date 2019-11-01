@@ -1,3 +1,5 @@
+; Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
+; Notified per clause 4(b) of the license.
 ; RUN: llc -march=amdgcn -mcpu=tonga -mattr=-flat-for-global -verify-machineinstrs -show-mc-encoding < %s | FileCheck -check-prefixes=VI,VI-OPT,PREGFX10,PREGFX10-OPT %s
 ; RUN: llc -O0 -march=amdgcn -mcpu=tonga -mattr=-flat-for-global -verify-machineinstrs -show-mc-encoding < %s | FileCheck -check-prefixes=VI,VI-NOOPT,PREGFX10,PREGFX10-NOOPT %s
 ; RUN: llc -march=amdgcn -mcpu=gfx1010 -mattr=-flat-for-global -verify-machineinstrs -show-mc-encoding < %s | FileCheck -check-prefixes=VI,VI-OPT %s
@@ -43,7 +45,6 @@ define amdgpu_kernel void @dpp_wait_states(i32 addrspace(1)* %out, i32 %in) {
 ; PREGFX10-OPT: s_mov_b32
 ; PREGFX10-OPT: s_mov_b32
 ; PREGFX10-NOOPT: s_waitcnt
-; PREGFX10-NOOPT: v_mov_b32_e32
 ; PREGFX10-NOOPT-NEXT: s_nop 0
 ; VI: v_mov_b32_dpp [[VGPR0:v[0-9]+]], v{{[0-9]+}} quad_perm:[1,0,0,0] row_mask:0x1 bank_mask:0x1 bound_ctrl:0
 ; PREGFX10-OPT: s_nop 1

@@ -1,3 +1,5 @@
+; Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
+; Notified per clause 4(b) of the license.
 ; RUN: llc -O0 -mtriple=amdgcn--amdhsa -march=amdgcn -amdgpu-spill-sgpr-to-vgpr=0 -verify-machineinstrs < %s | FileCheck -enable-var-scope -check-prefix=VMEM -check-prefix=GCN %s
 ; RUN: llc -O0 -mtriple=amdgcn--amdhsa -march=amdgcn -amdgpu-spill-sgpr-to-vgpr=1 -verify-machineinstrs < %s | FileCheck -enable-var-scope -check-prefix=VGPR -check-prefix=GCN %s
 
@@ -89,7 +91,7 @@ endif:
 }
 
 ; GCN-LABEL: {{^}}divergent_loop:
-; VGPR: workitem_private_segment_byte_size = 12{{$}}
+; VGPR: workitem_private_segment_byte_size = 16{{$}}
 
 ; GCN: {{^}}; %bb.0:
 
@@ -123,9 +125,10 @@ endif:
 ; GCN: [[LOOP:BB[0-9]+_[0-9]+]]:
 ; GCN: buffer_load_dword v[[VAL_LOOP_RELOAD:[0-9]+]], off, s[0:3], s7 offset:[[LOAD0_OFFSET]] ; 4-byte Folded Reload
 ; GCN: v_subrev_i32_e32 [[VAL_LOOP:v[0-9]+]], vcc, v{{[0-9]+}}, v[[VAL_LOOP_RELOAD]]
-; GCN: s_cmp_lg_u32
+; GCN: v_cmp_ne_u32_e32 vcc,
+; GCN: s_and_b64 vcc, exec, vcc
 ; GCN: buffer_store_dword [[VAL_LOOP]], off, s[0:3], s7 offset:[[VAL_SUB_OFFSET:[0-9]+]] ; 4-byte Folded Spill
-; GCN-NEXT: s_cbranch_scc1 [[LOOP]]
+; GCN-NEXT: s_cbranch_vccnz [[LOOP]]
 
 
 ; GCN: [[END]]:

@@ -1,3 +1,5 @@
+; Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
+; Notified per clause 4(b) of the license.
 ; RUN: llc -march=amdgcn -verify-machineinstrs < %s | FileCheck -enable-var-scope -check-prefixes=GCN-SAFE,SI-SAFE,GCN,FUNC %s
 ; RUN: llc -enable-no-nans-fp-math -enable-no-signed-zeros-fp-math -march=amdgcn -verify-machineinstrs < %s | FileCheck -enable-var-scope -check-prefixes=SI-NONAN,GCN-NONAN,GCN,FUNC %s
 
@@ -33,13 +35,9 @@ define amdgpu_kernel void @s_test_fmin_legacy_subreg_inputs_f32(float addrspace(
 ; FUNC-LABEL: {{^}}s_test_fmin_legacy_ule_f32:
 ; GCN-DAG: s_load_dwordx2 s{{\[}}[[A:[0-9]+]]:[[B:[0-9]+]]{{\]}}, s{{\[[0-9]+:[0-9]+\]}}, {{0xb|0x2c}}
 
-; SI-SAFE: v_mov_b32_e32 [[VA:v[0-9]+]], s[[A]]
+; GCN-DAG: v_mov_b32_e32 [[VB:v[0-9]+]], s[[B]]
 
-; GCN-NONAN: v_mov_b32_e32 [[VB:v[0-9]+]], s[[B]]
-
-; VI-SAFE: v_mov_b32_e32 [[VB:v[0-9]+]], s[[B]]
-
-; SI-SAFE: v_min_legacy_f32_e32 {{v[0-9]+}}, s[[B]], [[VA]]
+; SI-SAFE: v_min_legacy_f32_e64 {{v[0-9]+}}, [[VB]], s[[A]]
 
 ; VI-SAFE: v_mov_b32_e32 [[VA:v[0-9]+]], s[[A]]
 ; VI-SAFE: v_cmp_ngt_f32_e32 vcc, s[[A]], [[VB]]

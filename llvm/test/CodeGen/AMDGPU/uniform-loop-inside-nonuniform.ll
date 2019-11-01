@@ -1,3 +1,5 @@
+; Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
+; Notified per clause 4(b) of the license.
 ; RUN: llc -march=amdgcn -mcpu=verde < %s | FileCheck %s
 
 ; Test a simple uniform loop that lives inside non-uniform control flow.
@@ -7,9 +9,10 @@
 ; CHECK: s_and_saveexec_b64
 ; CHECK-NEXT: ; mask branch
 ; CHECK-NEXT: s_cbranch_execz BB{{[0-9]+_[0-9]+}}
+; CHECK-NEXT: BB{{[0-9]+_[0-9]+}}: ; %loop_body.preheader
 
-; CHECK: [[LOOP_BODY_LABEL:BB[0-9]+_[0-9]+]]: ; %loop_body
-; CHECK: s_cbranch_scc0 [[LOOP_BODY_LABEL]]
+; CHECK: [[LOOP_BODY_LABEL:BB[0-9]+_[0-9]+]]:
+; CHECK: s_cbranch_vccz [[LOOP_BODY_LABEL]]
 
 ; CHECK: s_endpgm
 define amdgpu_ps void @test1(<8 x i32> inreg %rsrc, <2 x i32> %addr.base, i32 %y, i32 %p) {

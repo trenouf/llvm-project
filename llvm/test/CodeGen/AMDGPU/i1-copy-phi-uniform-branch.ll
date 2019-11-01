@@ -1,3 +1,5 @@
+; Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
+; Notified per clause 4(b) of the license.
 ; RUN: llc -march=amdgcn -verify-machineinstrs < %s | FileCheck -check-prefix=GCN %s
 
 ; GCN-LABEL: {{^}}test_dont_clobber_scc:
@@ -7,6 +9,7 @@
 ; GCN:      s_cbranch_scc1  [[PREEXIT:BB[0-9_]+]]
 
 ; GCN: ; %blocka
+; GCN:      s_xor_b64       s[{{[0-9:]+}}], exec, -1
 ; GCN:      s_cmp_eq_u32    s1, 0
 ; GCN:      s_cbranch_scc1  [[EXIT:BB[0-9_]+]]
 
