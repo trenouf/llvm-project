@@ -4641,10 +4641,9 @@ Error BitcodeReader::parseFunctionBody(Function *F) {
       // There is an optional final record for fast-math-flags if this phi has a
       // floating-point type.
       size_t NumArgs = (Record.size() - 1) / 2;
-      if ((Record.size() - 1) % 2 == 1 && !Ty->isFPOrFPVectorTy())
-        return error("Invalid record");
-
       PHINode *PN = PHINode::Create(Ty, NumArgs);
+      if ((Record.size() - 1) % 2 == 1 && !isa<FPMathOperator>(PN))
+        return error("Invalid record");
       InstructionList.push_back(PN);
 
       for (unsigned i = 0; i != NumArgs; i++) {
@@ -4761,7 +4760,7 @@ Error BitcodeReader::parseFunctionBody(Function *F) {
       const DataLayout &DL = TheModule->getDataLayout();
       unsigned AS = DL.getAllocaAddrSpace();
 
-      AllocaInst *AI = new AllocaInst(Ty, AS, Size, Align ? Align->value() : 0);
+      AllocaInst *AI = new AllocaInst(Ty, AS, Size, Align);
       AI->setUsedWithInAlloca(InAlloca);
       AI->setSwiftError(SwiftError);
       I = AI;
@@ -4792,8 +4791,7 @@ Error BitcodeReader::parseFunctionBody(Function *F) {
       MaybeAlign Align;
       if (Error Err = parseAlignmentValue(Record[OpNum], Align))
         return Err;
-      I = new LoadInst(Ty, Op, "", Record[OpNum + 1],
-                       Align ? Align->value() : 0);
+      I = new LoadInst(Ty, Op, "", Record[OpNum + 1], Align);
       InstructionList.push_back(I);
       break;
     }
@@ -4830,8 +4828,7 @@ Error BitcodeReader::parseFunctionBody(Function *F) {
       MaybeAlign Align;
       if (Error Err = parseAlignmentValue(Record[OpNum], Align))
         return Err;
-      I = new LoadInst(Ty, Op, "", Record[OpNum + 1],
-                       Align ? Align->value() : 0, Ordering, SSID);
+      I = new LoadInst(Ty, Op, "", Record[OpNum + 1], Align, Ordering, SSID);
       InstructionList.push_back(I);
       break;
     }
@@ -4853,8 +4850,7 @@ Error BitcodeReader::parseFunctionBody(Function *F) {
       MaybeAlign Align;
       if (Error Err = parseAlignmentValue(Record[OpNum], Align))
         return Err;
-      I = new StoreInst(Val, Ptr, Record[OpNum + 1],
-                        Align ? Align->value() : 0);
+      I = new StoreInst(Val, Ptr, Record[OpNum + 1], Align);
       InstructionList.push_back(I);
       break;
     }
@@ -4887,8 +4883,7 @@ Error BitcodeReader::parseFunctionBody(Function *F) {
       MaybeAlign Align;
       if (Error Err = parseAlignmentValue(Record[OpNum], Align))
         return Err;
-      I = new StoreInst(Val, Ptr, Record[OpNum + 1], Align ? Align->value() : 0,
-                        Ordering, SSID);
+      I = new StoreInst(Val, Ptr, Record[OpNum + 1], Align, Ordering, SSID);
       InstructionList.push_back(I);
       break;
     }

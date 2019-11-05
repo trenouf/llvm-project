@@ -9108,6 +9108,8 @@ SDValue DAGCombiner::CombineExtLoad(SDNode *N) {
   if (!TLI.isLoadExtLegalOrCustom(ExtType, SplitDstVT, SplitSrcVT))
     return SDValue();
 
+  assert(!DstVT.isScalableVector() && "Unexpected scalable vector type");
+
   SDLoc DL(N);
   const unsigned NumSplits =
       DstVT.getVectorNumElements() / SplitDstVT.getVectorNumElements();
@@ -9671,6 +9673,29 @@ static bool isTruncateOf(SelectionDAG &DAG, SDValue N, SDValue &Op,
   return (Known.Zero | 1).isAllOnesValue();
 }
 
+/// Given an extending node with a pop-count operand, if the target does not
+/// support a pop-count in the narrow source type but does support it in the
+/// destination type, widen the pop-count to the destination type.
+static SDValue widenCtPop(SDNode *Extend, SelectionDAG &DAG) {
+  assert((Extend->getOpcode() == ISD::ZERO_EXTEND ||
+          Extend->getOpcode() == ISD::ANY_EXTEND) && "Expected extend op");
+
+  SDValue CtPop = Extend->getOperand(0);
+  if (CtPop.getOpcode() != ISD::CTPOP || !CtPop.hasOneUse())
+    return SDValue();
+
+  EVT VT = Extend->getValueType(0);
+  const TargetLowering &TLI = DAG.getTargetLoweringInfo();
+  if (TLI.isOperationLegalOrCustom(ISD::CTPOP, CtPop.getValueType()) ||
+      !TLI.isOperationLegalOrCustom(ISD::CTPOP, VT))
+    return SDValue();
+
+  // zext (ctpop X) --> ctpop (zext X)
+  SDLoc DL(Extend);
+  SDValue NewZext = DAG.getZExtOrTrunc(CtPop.getOperand(0), DL, VT);
+  return DAG.getNode(ISD::CTPOP, DL, VT, NewZext);
+}
+
 SDValue DAGCombiner::visitZERO_EXTEND(SDNode *N) {
   SDValue N0 = N->getOperand(0);
   EVT VT = N->getValueType(0);
@@ -9921,6 +9946,9 @@ SDValue DAGCombiner::visitZERO_EXTEND(SDNode *N) {
   if (SDValue NewVSel = matchVSelectOpSizesWithSetCC(N))
     return NewVSel;
 
+  if (SDValue NewCtPop = widenCtPop(N, DAG))
+    return NewCtPop;
+
   return SDValue();
 }
 
@@ -10066,6 +10094,9 @@ SDValue DAGCombiner::visitANY_EXTEND(SDNode *N) {
             cast<CondCodeSDNode>(N0.getOperand(2))->get(), true))
       return SCC;
   }
+
+  if (SDValue NewCtPop = widenCtPop(N, DAG))
+    return NewCtPop;
 
   return SDValue();
 }
@@ -10735,16 +10766,16 @@ SDValue DAGCombiner::visitTRUNCATE(SDNode *N) {
   // e.g. trunc (i64 (bitcast v2i32:x)) -> extract_vector_elt v2i32:x, idx
   if (N0.getOpcode() == ISD::BITCAST && !VT.isVector()) {
     SDValue VecSrc = N0.getOperand(0);
-    EVT SrcVT = VecSrc.getValueType();
-    if (SrcVT.isVector() && SrcVT.getScalarType() == VT &&
+    EVT VecSrcVT = VecSrc.getValueType();
+    if (VecSrcVT.isVector() && VecSrcVT.getScalarType() == VT &&
         (!LegalOperations ||
-         TLI.isOperationLegal(ISD::EXTRACT_VECTOR_ELT, SrcVT))) {
+         TLI.isOperationLegal(ISD::EXTRACT_VECTOR_ELT, VecSrcVT))) {
       SDLoc SL(N);
 
       EVT IdxVT = TLI.getVectorIdxTy(DAG.getDataLayout());
-      unsigned Idx = isLE ? 0 : SrcVT.getVectorNumElements() - 1;
-      return DAG.getNode(ISD::EXTRACT_VECTOR_ELT, SL, VT,
-                         VecSrc, DAG.getConstant(Idx, SL, IdxVT));
+      unsigned Idx = isLE ? 0 : VecSrcVT.getVectorNumElements() - 1;
+      return DAG.getNode(ISD::EXTRACT_VECTOR_ELT, SL, VT, VecSrc,
+                         DAG.getConstant(Idx, SL, IdxVT));
     }
   }
 
@@ -16561,10 +16592,6 @@ SDValue DAGCombiner::visitINSERT_VECTOR_ELT(SDNode *N) {
   SDValue InVal = N->getOperand(1);
   SDValue EltNo = N->getOperand(2);
   SDLoc DL(N);
-
-  // If the inserted element is an UNDEF, just use the input vector.
-  if (InVal.isUndef())
-    return InVec;
 
   EVT VT = InVec.getValueType();
   unsigned NumElts = VT.getVectorNumElements();

@@ -45,13 +45,15 @@ class ProgressDisplay(object):
     def update(self, test):
         self.completed += 1
 
-        show_result = test.result.code.isFailure or \
+        show_result = test.isFailure() or \
                 self.opts.showAllOutput or \
                 (not self.opts.quiet and not self.opts.succinct)
         if show_result:
             self.print_result(test)
 
         if self.progressBar:
+            if test.isFailure():
+                self.progressBar.barColor = 'RED'
             percent = float(self.completed) / self.numTests
             self.progressBar.update(percent, test.getFullName())
 
@@ -65,12 +67,25 @@ class ProgressDisplay(object):
                                      self.completed, self.numTests))
 
         # Show the test failure output, if requested.
-        if (test.result.code.isFailure and self.opts.showOutput) or \
+        if (test.isFailure() and self.opts.showOutput) or \
            self.opts.showAllOutput:
-            if test.result.code.isFailure:
+            if test.isFailure():
                 print("%s TEST '%s' FAILED %s" % ('*'*20, test.getFullName(),
                                                   '*'*20))
-            print(test.result.output)
+            out = test.result.output
+            # Encode/decode so that, when using Python 3.6.5 in Windows 10,
+            # print(out) doesn't raise UnicodeEncodeError if out contains
+            # special characters.  However, Python 2 might try to decode
+            # as part of the encode call if out is already encoded, so skip
+            # encoding if it raises UnicodeDecodeError.
+            if sys.stdout.encoding:
+                try:
+                    out = out.encode(encoding=sys.stdout.encoding,
+                                     errors="replace")
+                except UnicodeDecodeError:
+                    pass
+                out = out.decode(encoding=sys.stdout.encoding)
+            print(out)
             print("*" * 20)
 
         # Report test metrics, if present.

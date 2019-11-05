@@ -3,6 +3,8 @@
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+// Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
+// Notified per clause 4(b) of the license.
 //
 //===----------------------------------------------------------------------===//
 //
@@ -372,7 +374,6 @@ private:
   AMDGPU::IsaVersion IV;
 
   DenseSet<MachineInstr *> TrackedWaitcntSet;
-  DenseSet<MachineInstr *> VCCZBugHandledSet;
 
   struct BlockInfo {
     MachineBasicBlock *MBB;
@@ -939,19 +940,33 @@ bool SIInsertWaitcnts::generateWaitcntInstBefore(
     }
 
     if (MI.isCall() && callWaitsOnFunctionEntry(MI)) {
-      // Don't bother waiting on anything except the call address. The function
-      // is going to insert a wait on everything in its prolog. This still needs
-      // to be careful if the call target is a load (e.g. a GOT load).
+      // The function is going to insert a wait on everything in its prolog.
+      // This still needs to be careful if the call target is a load (e.g. a GOT
+      // load). We also need to check WAW depenancy with saved PC.
       Wait = AMDGPU::Waitcnt();
 
       int CallAddrOpIdx =
           AMDGPU::getNamedOperandIdx(MI.getOpcode(), AMDGPU::OpName::src0);
-      RegInterval Interval = ScoreBrackets.getRegInterval(&MI, TII, MRI, TRI,
-                                                          CallAddrOpIdx, false);
-      for (signed RegNo = Interval.first; RegNo < Interval.second; ++RegNo) {
+      RegInterval CallAddrOpInterval = ScoreBrackets.getRegInterval(
+          &MI, TII, MRI, TRI, CallAddrOpIdx, false);
+
+      for (signed RegNo = CallAddrOpInterval.first;
+           RegNo < CallAddrOpInterval.second; ++RegNo)
         ScoreBrackets.determineWait(
             LGKM_CNT, ScoreBrackets.getRegScore(RegNo, LGKM_CNT), Wait);
+
+      int RtnAddrOpIdx =
+            AMDGPU::getNamedOperandIdx(MI.getOpcode(), AMDGPU::OpName::dst);
+      if (RtnAddrOpIdx != -1) {
+        RegInterval RtnAddrOpInterval = ScoreBrackets.getRegInterval(
+            &MI, TII, MRI, TRI, RtnAddrOpIdx, false);
+
+        for (signed RegNo = RtnAddrOpInterval.first;
+             RegNo < RtnAddrOpInterval.second; ++RegNo)
+          ScoreBrackets.determineWait(
+              LGKM_CNT, ScoreBrackets.getRegScore(RegNo, LGKM_CNT), Wait);
       }
+
     } else {
       // FIXME: Should not be relying on memoperands.
       // Look at the source operands of every instruction to see if
@@ -1354,6 +1369,10 @@ bool SIInsertWaitcnts::insertWaitcntInBlock(MachineFunction &MF,
     ScoreBrackets.dump();
   });
 
+  // Assume VCCZ is correct at basic block boundaries, unless and until we need
+  // to handle cases where that is not true.
+  bool VCCZCorrect = true;
+
   // Walk over the instructions.
   MachineInstr *OldWaitcntInstr = nullptr;
 
@@ -1373,14 +1392,32 @@ bool SIInsertWaitcnts::insertWaitcntInBlock(MachineFunction &MF,
       continue;
     }
 
-    bool VCCZBugWorkAround = false;
-    if (readsVCCZ(Inst) &&
-        (!VCCZBugHandledSet.count(&Inst))) {
-      if (ScoreBrackets.getScoreLB(LGKM_CNT) <
-              ScoreBrackets.getScoreUB(LGKM_CNT) &&
-          ScoreBrackets.hasPendingEvent(SMEM_ACCESS)) {
-        if (ST->getGeneration() <= AMDGPUSubtarget::SEA_ISLANDS)
-          VCCZBugWorkAround = true;
+    bool RestoreVCCZ = false;
+    if (readsVCCZ(Inst)) {
+      if (!VCCZCorrect)
+        RestoreVCCZ = true;
+      else if (ST->hasReadVCCZBug()) {
+        if (ScoreBrackets.getScoreLB(LGKM_CNT) <
+            ScoreBrackets.getScoreUB(LGKM_CNT) &&
+            ScoreBrackets.hasPendingEvent(SMEM_ACCESS)) {
+          RestoreVCCZ = true;
+        }
+      }
+    }
+
+    if (!ST->partialVCCWritesUpdateVCCZ()) {
+      // Up to gfx9, writes to vcc_lo and vcc_hi don't update vccz.
+      // Writes to vcc will fix it. Only examine explicit defs.
+      for (auto &Op : Inst.defs()) {
+        switch (Op.getReg()) {
+        case AMDGPU::VCC:
+          VCCZCorrect = true;
+          break;
+        case AMDGPU::VCC_LO:
+        case AMDGPU::VCC_HI:
+          VCCZCorrect = false;
+          break;
+        }
       }
     }
 
@@ -1409,7 +1446,7 @@ bool SIInsertWaitcnts::insertWaitcntInBlock(MachineFunction &MF,
 
     // TODO: Remove this work-around after fixing the scheduler and enable the
     // assert above.
-    if (VCCZBugWorkAround) {
+    if (RestoreVCCZ) {
       // Restore the vccz bit.  Any time a value is written to vcc, the vcc
       // bit is updated, so we can restore the bit by reading the value of
       // vcc and then writing it back to the register.
@@ -1417,7 +1454,7 @@ bool SIInsertWaitcnts::insertWaitcntInBlock(MachineFunction &MF,
               TII->get(ST->isWave32() ? AMDGPU::S_MOV_B32 : AMDGPU::S_MOV_B64),
               TRI->getVCC())
           .addReg(TRI->getVCC());
-      VCCZBugHandledSet.insert(&Inst);
+      VCCZCorrect = true;
       Modified = true;
     }
 
@@ -1457,7 +1494,6 @@ bool SIInsertWaitcnts::runOnMachineFunction(MachineFunction &MF) {
       RegisterEncoding.SGPR0 + HardwareLimits.NumSGPRsMax - 1;
 
   TrackedWaitcntSet.clear();
-  VCCZBugHandledSet.clear();
   RpotIdxMap.clear();
   BlockInfos.clear();
 

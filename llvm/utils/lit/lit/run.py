@@ -1,5 +1,6 @@
 import multiprocessing
 import time
+import os
 
 import lit.Test
 import lit.util
@@ -66,14 +67,9 @@ class Run(object):
 
         return end - start
 
-    def _consume_test_result(self, test, result):
-        """Test completion callback for lit.worker.run_one_test
-
-        Updates the test result status in the parent process. Each task in the
-        pool returns the test index and the result, and we use the index to look
-        up the original test object. Also updates the progress bar as tasks
-        complete.
-        """
+    # TODO(yln): as the comment says.. this is racing with the main thread waiting
+    # for results
+    def _process_result(self, test, result):
         # Don't add any more test results after we've hit the maximum failure
         # count.  Otherwise we're racing with the main thread, which is going
         # to terminate the process pool soon.
@@ -100,8 +96,8 @@ class SerialRun(Run):
     def _execute(self, deadline):
         # TODO(yln): ignores deadline
         for test in self.tests:
-            result = lit.worker._execute_test(test, self.lit_config)
-            self._consume_test_result(test, result)
+            result = lit.worker._execute(test, self.lit_config)
+            self._process_result(test, result)
             if self.hit_max_failures:
                 break
 
@@ -116,15 +112,63 @@ class ParallelRun(Run):
             multiprocessing.BoundedSemaphore(v) for k, v in
             self.lit_config.parallelism_groups.items()}
 
+        self._increase_process_limit()
+
         # Start a process pool. Copy over the data shared between all test runs.
         # FIXME: Find a way to capture the worker process stderr. If the user
         # interrupts the workers before we make it into our task callback, they
         # will each raise a KeyboardInterrupt exception and print to stderr at
         # the same time.
-        pool = multiprocessing.Pool(self.workers, lit.worker.initializer,
+        pool = multiprocessing.Pool(self.workers, lit.worker.initialize,
                                     (self.lit_config, semaphores))
 
-        # Install a console-control signal handler on Windows.
+        self._install_win32_signal_handler(pool)
+
+        async_results = [
+            pool.apply_async(lit.worker.execute, args=[test],
+                callback=lambda r, t=test: self._process_result(t, r))
+            for test in self.tests]
+        pool.close()
+
+        for ar in async_results:
+            timeout = deadline - time.time()
+            try:
+                ar.get(timeout)
+            except multiprocessing.TimeoutError:
+                # TODO(yln): print timeout error
+                pool.terminate()
+                break
+            if self.hit_max_failures:
+                pool.terminate()
+                break
+        pool.join()
+
+    # TODO(yln): interferes with progress bar
+    # Some tests use threads internally, and at least on Linux each of these
+    # threads counts toward the current process limit. Try to raise the (soft)
+    # process limit so that tests don't fail due to resource exhaustion.
+    def _increase_process_limit(self):
+        ncpus = lit.util.detectCPUs()
+        desired_limit = self.workers * ncpus * 2 # the 2 is a safety factor
+
+        # Importing the resource module will likely fail on Windows.
+        try:
+            import resource
+            NPROC = resource.RLIMIT_NPROC
+
+            soft_limit, hard_limit = resource.getrlimit(NPROC)
+            desired_limit = min(desired_limit, hard_limit)
+
+            if soft_limit < desired_limit:
+                resource.setrlimit(NPROC, (desired_limit, hard_limit))
+                self.lit_config.note('Raised process limit from %d to %d' % \
+                                        (soft_limit, desired_limit))
+        except Exception as ex:
+            # Warn, unless this is Windows, in which case this is expected.
+            if os.name != 'nt':
+                self.lit_config.warning('Failed to raise process limit: %s' % ex)
+
+    def _install_win32_signal_handler(self, pool):
         if lit.util.win32api is not None:
             def console_ctrl_handler(type):
                 print('\nCtrl-C detected, terminating.')
@@ -133,28 +177,3 @@ class ParallelRun(Run):
                 lit.util.abort_now()
                 return True
             lit.util.win32api.SetConsoleCtrlHandler(console_ctrl_handler, True)
-
-        try:
-            async_results = [pool.apply_async(lit.worker.run_one_test,
-                                              args=(test,),
-                                              callback=lambda r,t=test: self._consume_test_result(t, r))
-                             for test in self.tests]
-            pool.close()
-
-            # Wait for all results to come in. The callback that runs in the
-            # parent process will update the display.
-            for a in async_results:
-                timeout = deadline - time.time()
-                a.wait(timeout)
-                if not a.successful():
-                    # TODO(yln): this also raises on a --max-time time
-                    a.get() # Exceptions raised here come from the worker.
-                if self.hit_max_failures:
-                    break
-        except:
-            # Stop the workers and wait for any straggling results to come in
-            # if we exited without waiting on every async result.
-            pool.terminate()
-            raise
-        finally:
-            pool.join()

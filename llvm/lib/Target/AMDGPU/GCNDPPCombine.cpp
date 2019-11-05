@@ -3,8 +3,6 @@
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-// Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
-// Notified per clause 4(b) of the license.
 //
 //===----------------------------------------------------------------------===//
 // The pass combines V_MOV_B32_dpp instruction with its VALU uses as a DPP src0
@@ -43,6 +41,7 @@
 #include "AMDGPUSubtarget.h"
 #include "SIInstrInfo.h"
 #include "MCTargetDesc/AMDGPUMCTargetDesc.h"
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
@@ -157,8 +156,6 @@ MachineInstr *GCNDPPCombine::createDPPInst(MachineInstr &OrigMI,
                                            RegSubRegPair CombOldVGPR,
                                            bool CombBCZ) const {
   assert(MovMI.getOpcode() == AMDGPU::V_MOV_B32_dpp);
-  assert(TII->getNamedOperand(MovMI, AMDGPU::OpName::vdst)->getReg() ==
-         TII->getNamedOperand(OrigMI, AMDGPU::OpName::src0)->getReg());
 
   auto OrigOp = OrigMI.getOpcode();
   auto DPPOp = getDPPOp(OrigOp);
@@ -238,7 +235,8 @@ MachineInstr *GCNDPPCombine::createDPPInst(MachineInstr &OrigMI,
     }
 
     if (auto *Src2 = TII->getNamedOperand(OrigMI, AMDGPU::OpName::src2)) {
-      if (!TII->isOperandLegal(*DPPInst.getInstr(), NumOperands, Src2)) {
+      if (!TII->getNamedOperand(*DPPInst.getInstr(), AMDGPU::OpName::src2) ||
+          !TII->isOperandLegal(*DPPInst.getInstr(), NumOperands, Src2)) {
         LLVM_DEBUG(dbgs() << "  failed: src2 is illegal\n");
         Fail = true;
         break;
@@ -430,6 +428,7 @@ bool GCNDPPCombine::combineDPPMov(MachineInstr &MovMI) const {
     dbgs() << ", bound_ctrl=" << CombBCZ << '\n');
 
   SmallVector<MachineInstr*, 4> OrigMIs, DPPMIs;
+  DenseMap<MachineInstr*, SmallVector<unsigned, 4>> RegSeqWithOpNos;
   auto CombOldVGPR = getRegSubRegPair(*OldOpnd);
   // try to reuse previous old reg if its undefined (IMPLICIT_DEF)
   if (CombBCZ && OldOpndValue) { // CombOldVGPR should be undef
@@ -442,13 +441,49 @@ bool GCNDPPCombine::combineDPPMov(MachineInstr &MovMI) const {
 
   OrigMIs.push_back(&MovMI);
   bool Rollback = true;
+  SmallVector<MachineOperand*, 16> Uses;
+
   for (auto &Use : MRI->use_nodbg_operands(DPPMovReg)) {
+    Uses.push_back(&Use);
+  }
+
+  while (!Uses.empty()) {
+    MachineOperand *Use = Uses.pop_back_val();
     Rollback = true;
 
-    auto &OrigMI = *Use.getParent();
+    auto &OrigMI = *Use->getParent();
     LLVM_DEBUG(dbgs() << "  try: " << OrigMI);
 
     auto OrigOp = OrigMI.getOpcode();
+    if (OrigOp == AMDGPU::REG_SEQUENCE) {
+      Register FwdReg = OrigMI.getOperand(0).getReg();
+      unsigned FwdSubReg = 0;
+
+      if (execMayBeModifiedBeforeAnyUse(*MRI, FwdReg, OrigMI)) {
+        LLVM_DEBUG(dbgs() << "  failed: EXEC mask should remain the same"
+                             " for all uses\n");
+        break;
+      }
+
+      unsigned OpNo, E = OrigMI.getNumOperands();
+      for (OpNo = 1; OpNo < E; OpNo += 2) {
+        if (OrigMI.getOperand(OpNo).getReg() == DPPMovReg) {
+          FwdSubReg = OrigMI.getOperand(OpNo + 1).getImm();
+          break;
+        }
+      }
+
+      if (!FwdSubReg)
+        break;
+
+      for (auto &Op : MRI->use_nodbg_operands(FwdReg)) {
+        if (Op.getSubReg() == FwdSubReg)
+          Uses.push_back(&Op);
+      }
+      RegSeqWithOpNos[&OrigMI].push_back(OpNo);
+      continue;
+    }
+
     if (TII->isVOP3(OrigOp)) {
       if (!TII->hasVALU32BitEncoding(OrigOp)) {
         LLVM_DEBUG(dbgs() << "  failed: VOP3 hasn't e32 equivalent\n");
@@ -469,14 +504,14 @@ bool GCNDPPCombine::combineDPPMov(MachineInstr &MovMI) const {
     }
 
     LLVM_DEBUG(dbgs() << "  combining: " << OrigMI);
-    if (&Use == TII->getNamedOperand(OrigMI, AMDGPU::OpName::src0)) {
+    if (Use == TII->getNamedOperand(OrigMI, AMDGPU::OpName::src0)) {
       if (auto *DPPInst = createDPPInst(OrigMI, MovMI, CombOldVGPR,
                                         OldOpndValue, CombBCZ)) {
         DPPMIs.push_back(DPPInst);
         Rollback = false;
       }
     } else if (OrigMI.isCommutable() &&
-               &Use == TII->getNamedOperand(OrigMI, AMDGPU::OpName::src1)) {
+               Use == TII->getNamedOperand(OrigMI, AMDGPU::OpName::src1)) {
       auto *BB = OrigMI.getParent();
       auto *NewMI = BB->getParent()->CloneMachineInstr(&OrigMI);
       BB->insert(OrigMI, NewMI);
@@ -497,8 +532,21 @@ bool GCNDPPCombine::combineDPPMov(MachineInstr &MovMI) const {
     OrigMIs.push_back(&OrigMI);
   }
 
+  Rollback |= !Uses.empty();
+
   for (auto *MI : *(Rollback? &DPPMIs : &OrigMIs))
     MI->eraseFromParent();
+
+  if (!Rollback) {
+    for (auto &S : RegSeqWithOpNos) {
+      if (MRI->use_nodbg_empty(S.first->getOperand(0).getReg())) {
+        S.first->eraseFromParent();
+        continue;
+      }
+      while (!S.second.empty())
+        S.first->getOperand(S.second.pop_back_val()).setIsUndef(true);
+    }
+  }
 
   return !Rollback;
 }

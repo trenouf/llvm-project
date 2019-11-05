@@ -76,6 +76,9 @@ STATISTIC(NumSubNUW,    "Number of no-unsigned-wrap deductions for sub");
 STATISTIC(NumMulNW,     "Number of no-wrap deductions for mul");
 STATISTIC(NumMulNSW,    "Number of no-signed-wrap deductions for mul");
 STATISTIC(NumMulNUW,    "Number of no-unsigned-wrap deductions for mul");
+STATISTIC(NumShlNW,     "Number of no-wrap deductions for shl");
+STATISTIC(NumShlNSW,    "Number of no-signed-wrap deductions for shl");
+STATISTIC(NumShlNUW,    "Number of no-unsigned-wrap deductions for shl");
 STATISTIC(NumOverflows, "Number of overflow checks removed");
 STATISTIC(NumSaturating,
     "Number of saturating arithmetics converted to normal arithmetics");
@@ -191,7 +194,14 @@ static bool simplifyCommonValuePhi(PHINode *P, LazyValueInfo *LVI,
   }
 
   // All constant incoming values map to the same variable along the incoming
-  // edges of the phi. The phi is unnecessary.
+  // edges of the phi. The phi is unnecessary. However, we must drop all
+  // poison-generating flags to ensure that no poison is propagated to the phi
+  // location by performing this substitution.
+  // Warning: If the underlying analysis changes, this may not be enough to
+  //          guarantee that poison is not propagated.
+  // TODO: We may be able to re-infer flags by re-analyzing the instruction.
+  if (auto *CommonInst = dyn_cast<Instruction>(CommonValue))
+    CommonInst->dropPoisonGeneratingFlags();
   P->replaceAllUsesWith(CommonValue);
   P->eraseFromParent();
   ++NumPhiCommon;
@@ -449,6 +459,11 @@ static void setDeducedOverflowingFlags(Value *V, Instruction::BinaryOps Opcode,
     OpcNW = &NumMulNW;
     OpcNSW = &NumMulNSW;
     OpcNUW = &NumMulNUW;
+    break;
+  case Instruction::Shl:
+    OpcNW = &NumShlNW;
+    OpcNSW = &NumShlNSW;
+    OpcNUW = &NumShlNUW;
     break;
   default:
     llvm_unreachable("Will not be called with other binops");
@@ -861,6 +876,7 @@ static bool runImpl(Function &F, LazyValueInfo *LVI, DominatorTree *DT,
       case Instruction::Add:
       case Instruction::Sub:
       case Instruction::Mul:
+      case Instruction::Shl:
         BBChanged |= processBinOp(cast<BinaryOperator>(II), LVI);
         break;
       case Instruction::And:
