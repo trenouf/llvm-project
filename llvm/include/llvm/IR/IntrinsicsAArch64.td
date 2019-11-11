@@ -788,6 +788,19 @@ let TargetPrefix = "aarch64" in {  // All intrinsics start with "llvm.aarch64.".
                 [llvm_anyvector_ty],
                 [IntrNoMem]>;
 
+  class AdvSIMD_SVE_SCALE_Intrinsic
+    : Intrinsic<[llvm_anyvector_ty],
+                [LLVMScalarOrSameVectorWidth<0, llvm_i1_ty>,
+                 LLVMMatchType<0>,
+                 LLVMVectorOfBitcastsToInt<0>],
+                [IntrNoMem]>;
+
+  class AdvSIMD_SVE_TSMUL_Intrinsic
+    : Intrinsic<[llvm_anyvector_ty],
+                [LLVMMatchType<0>,
+                 LLVMVectorOfBitcastsToInt<0>],
+                [IntrNoMem]>;
+
   class AdvSIMD_SVE_DOT_Intrinsic
     : Intrinsic<[llvm_anyvector_ty],
                 [LLVMMatchType<0>,
@@ -821,6 +834,11 @@ class AdvSIMD_Pred2VectorArg_Intrinsic
              [LLVMScalarOrSameVectorWidth<0, llvm_i1_ty>, LLVMMatchType<0>, LLVMMatchType<0>],
              [IntrNoMem]>;
 
+class AdvSIMD_Pred3VectorArg_Intrinsic
+    : Intrinsic<[llvm_anyvector_ty],
+             [LLVMScalarOrSameVectorWidth<0, llvm_i1_ty>, LLVMMatchType<0>, LLVMMatchType<0>, LLVMMatchType<0>],
+             [IntrNoMem]>;
+
 
 //
 // Integer arithmetic
@@ -830,7 +848,32 @@ def int_aarch64_sve_add   : AdvSIMD_Pred2VectorArg_Intrinsic;
 def int_aarch64_sve_sub   : AdvSIMD_Pred2VectorArg_Intrinsic;
 def int_aarch64_sve_subr  : AdvSIMD_Pred2VectorArg_Intrinsic;
 
-def int_aarch64_sve_bic  : AdvSIMD_2VectorArg_Intrinsic;
+def int_aarch64_sve_and        : AdvSIMD_Pred2VectorArg_Intrinsic;
+def int_aarch64_sve_or         : AdvSIMD_Pred2VectorArg_Intrinsic;
+def int_aarch64_sve_xor        : AdvSIMD_Pred2VectorArg_Intrinsic;
+def int_aarch64_sve_bic        : AdvSIMD_2VectorArg_Intrinsic;
+def int_aarch64_sve_bic_pred   : AdvSIMD_Pred2VectorArg_Intrinsic;
+
+def int_aarch64_sve_mul        : AdvSIMD_Pred2VectorArg_Intrinsic;
+def int_aarch64_sve_smulh      : AdvSIMD_Pred2VectorArg_Intrinsic;
+def int_aarch64_sve_umulh      : AdvSIMD_Pred2VectorArg_Intrinsic;
+
+def int_aarch64_sve_sdiv       : AdvSIMD_Pred2VectorArg_Intrinsic;
+def int_aarch64_sve_udiv       : AdvSIMD_Pred2VectorArg_Intrinsic;
+def int_aarch64_sve_sdivr      : AdvSIMD_Pred2VectorArg_Intrinsic;
+def int_aarch64_sve_udivr      : AdvSIMD_Pred2VectorArg_Intrinsic;
+
+def int_aarch64_sve_smax       : AdvSIMD_Pred2VectorArg_Intrinsic;
+def int_aarch64_sve_umax       : AdvSIMD_Pred2VectorArg_Intrinsic;
+def int_aarch64_sve_smin       : AdvSIMD_Pred2VectorArg_Intrinsic;
+def int_aarch64_sve_umin       : AdvSIMD_Pred2VectorArg_Intrinsic;
+def int_aarch64_sve_sabd       : AdvSIMD_Pred2VectorArg_Intrinsic;
+def int_aarch64_sve_uabd       : AdvSIMD_Pred2VectorArg_Intrinsic;
+
+def int_aarch64_sve_mad        : AdvSIMD_Pred3VectorArg_Intrinsic;
+def int_aarch64_sve_msb        : AdvSIMD_Pred3VectorArg_Intrinsic;
+def int_aarch64_sve_mla        : AdvSIMD_Pred3VectorArg_Intrinsic;
+def int_aarch64_sve_mls        : AdvSIMD_Pred3VectorArg_Intrinsic;
 
 def int_aarch64_sve_abs : AdvSIMD_Merged1VectorArg_Intrinsic;
 def int_aarch64_sve_neg : AdvSIMD_Merged1VectorArg_Intrinsic;
@@ -876,6 +919,25 @@ def int_aarch64_sve_sxtw : AdvSIMD_Merged1VectorArg_Intrinsic;
 def int_aarch64_sve_uxtb : AdvSIMD_Merged1VectorArg_Intrinsic;
 def int_aarch64_sve_uxth : AdvSIMD_Merged1VectorArg_Intrinsic;
 def int_aarch64_sve_uxtw : AdvSIMD_Merged1VectorArg_Intrinsic;
+
+//
+// Floating-point arithmetic
+//
+
+def int_aarch64_sve_fabd       : AdvSIMD_Pred2VectorArg_Intrinsic;
+def int_aarch64_sve_fadd       : AdvSIMD_Pred2VectorArg_Intrinsic;
+def int_aarch64_sve_fdiv       : AdvSIMD_Pred2VectorArg_Intrinsic;
+def int_aarch64_sve_fdivr      : AdvSIMD_Pred2VectorArg_Intrinsic;
+def int_aarch64_sve_fmax       : AdvSIMD_Pred2VectorArg_Intrinsic;
+def int_aarch64_sve_fmaxnm     : AdvSIMD_Pred2VectorArg_Intrinsic;
+def int_aarch64_sve_fmin       : AdvSIMD_Pred2VectorArg_Intrinsic;
+def int_aarch64_sve_fminnm     : AdvSIMD_Pred2VectorArg_Intrinsic;
+def int_aarch64_sve_fmul       : AdvSIMD_Pred2VectorArg_Intrinsic;
+def int_aarch64_sve_fmulx      : AdvSIMD_Pred2VectorArg_Intrinsic;
+def int_aarch64_sve_fscale     : AdvSIMD_SVE_SCALE_Intrinsic;
+def int_aarch64_sve_fsub       : AdvSIMD_Pred2VectorArg_Intrinsic;
+def int_aarch64_sve_fsubr      : AdvSIMD_Pred2VectorArg_Intrinsic;
+def int_aarch64_sve_ftsmul_x   : AdvSIMD_SVE_TSMUL_Intrinsic;
 
 //
 // Floating-point comparisons

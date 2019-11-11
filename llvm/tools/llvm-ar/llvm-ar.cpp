@@ -530,8 +530,12 @@ static void doExtract(StringRef Name, const object::Archive::Child &C) {
   failIfError(ModeOrErr.takeError());
   sys::fs::perms Mode = ModeOrErr.get();
 
+  llvm::StringRef outputFilePath = sys::path::filename(Name);
+  if (Verbose)
+    outs() << "x - " << outputFilePath << '\n';
+
   int FD;
-  failIfError(sys::fs::openFileForWrite(sys::path::filename(Name), FD,
+  failIfError(sys::fs::openFileForWrite(outputFilePath, FD,
                                         sys::fs::CD_CreateAlways,
                                         sys::fs::OF_None, Mode),
               Name);
@@ -1092,7 +1096,7 @@ static int ar_main(int argc, char **argv) {
   cl::ExpandResponseFiles(Saver, cl::TokenizeGNUCommandLine, Argv);
   for (size_t i = 1; i < Argv.size(); ++i) {
     StringRef Arg = Argv[i];
-    const char *match;
+    const char *match = nullptr;
     auto MatchFlagWithArg = [&](const char *expected) {
       size_t len = strlen(expected);
       if (Arg == expected) {

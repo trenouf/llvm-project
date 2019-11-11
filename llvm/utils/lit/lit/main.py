@@ -7,6 +7,7 @@ See lit.pod for more information.
 import os
 import platform
 import sys
+import time
 
 import lit.cl_arguments
 import lit.discovery
@@ -74,7 +75,9 @@ def main(builtin_params = {}):
 
     opts.numWorkers = min(len(tests), opts.numWorkers)
 
-    elapsed = run_tests(tests, litConfig, opts, numTotalTests)
+    start = time.time()
+    run_tests(tests, litConfig, opts, numTotalTests)
+    elapsed = time.time() - start
 
     print_summary(tests, elapsed, opts)
 
@@ -179,8 +182,9 @@ def run_tests(tests, litConfig, opts, numTotalTests):
     run = lit.run.create_run(tests, litConfig, opts.numWorkers,
                              progress_callback, opts.timeout)
 
+    display.print_header()
     try:
-        elapsed = execute_in_tmp_dir(run, litConfig)
+        execute_in_tmp_dir(run, litConfig)
     except KeyboardInterrupt:
         #TODO(yln): should we attempt to cleanup the progress bar here?
         sys.exit(2)
@@ -188,10 +192,9 @@ def run_tests(tests, litConfig, opts, numTotalTests):
     # TODO(yln): change display to update when test starts, not when test completes
     # Ensure everything still works with SimpleProgressBar as well
     # finally:
-    #     display.finish()
+    #     display.clear()
 
-    display.finish()
-    return elapsed
+    display.clear()
 
 def execute_in_tmp_dir(run, litConfig):
     # Create a temp directory inside the normal temp directory so that we can
@@ -214,7 +217,7 @@ def execute_in_tmp_dir(run, litConfig):
     # scanning for stale temp directories, and deleting temp directories whose
     # lit process has died.
     try:
-        return run.execute()
+        run.execute()
     finally:
         if tmp_dir:
             try:
