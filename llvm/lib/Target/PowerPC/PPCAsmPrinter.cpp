@@ -1747,7 +1747,10 @@ void PPCAIXAsmPrinter::EmitGlobalVariable(const GlobalVariable *GV) {
     report_fatal_error("COMDAT not yet supported by AIX.");
 
   SectionKind GVKind = getObjFileLowering().getKindForGlobal(GV, TM);
-  if (!GVKind.isCommon() && !GVKind.isBSS() && !GVKind.isData())
+  if ((!GVKind.isCommon() && !GVKind.isBSS() && !GVKind.isData() &&
+       !GVKind.isReadOnly()) ||
+      GVKind.isMergeable2ByteCString() || GVKind.isMergeable4ByteCString() ||
+      GVKind.isMergeableConst())
     report_fatal_error("Encountered a global variable kind that is "
                        "not supported yet.");
 

@@ -3,8 +3,6 @@
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-// Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
-// Notified per clause 4(b) of the license.
 //
 //===----------------------------------------------------------------------===//
 //
@@ -1275,7 +1273,7 @@ SILoadStoreOptimizer::getTargetRegisterClass(const CombineInfo &CI) {
     case 2:
       return &AMDGPU::SReg_64_XEXECRegClass;
     case 4:
-      return &AMDGPU::SReg_128RegClass;
+      return &AMDGPU::SGPR_128RegClass;
     case 8:
       return &AMDGPU::SReg_256RegClass;
     case 16:
@@ -1667,8 +1665,8 @@ bool SILoadStoreOptimizer::promoteConstantOffsetToImm(
 void SILoadStoreOptimizer::addInstToMergeableList(const CombineInfo &CI,
                  std::list<std::list<CombineInfo> > &MergeableInsts) const {
   for (std::list<CombineInfo> &AddrList : MergeableInsts) {
-    if (AddrList.front().hasSameBaseAddress(*CI.I) &&
-        AddrList.front().InstClass == CI.InstClass) {
+    if (AddrList.front().InstClass == CI.InstClass &&
+        AddrList.front().hasSameBaseAddress(*CI.I)) {
       AddrList.emplace_back(CI);
       return;
     }
