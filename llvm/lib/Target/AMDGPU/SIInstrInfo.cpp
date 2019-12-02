@@ -544,7 +544,7 @@ void SIInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
       RC == &AMDGPU::SReg_32RegClass) {
     if (SrcReg == AMDGPU::SCC) {
       BuildMI(MBB, MI, DL, get(AMDGPU::S_CSELECT_B32), DestReg)
-          .addImm(1)
+          .addImm(-1)
           .addImm(0);
       return;
     }
@@ -842,7 +842,7 @@ void SIInstrInfo::insertVectorSelect(MachineBasicBlock &MBB,
       Register SReg = MRI.createVirtualRegister(BoolXExecRC);
       BuildMI(MBB, I, DL, get(ST.isWave32() ? AMDGPU::S_CSELECT_B32
                                             : AMDGPU::S_CSELECT_B64), SReg)
-        .addImm(1)
+        .addImm(-1)
         .addImm(0);
       BuildMI(MBB, I, DL, get(AMDGPU::V_CNDMASK_B32_e64), DstReg)
         .addImm(0)
@@ -857,7 +857,7 @@ void SIInstrInfo::insertVectorSelect(MachineBasicBlock &MBB,
       BuildMI(MBB, I, DL, get(ST.isWave32() ? AMDGPU::S_CSELECT_B32
                                             : AMDGPU::S_CSELECT_B64), SReg)
         .addImm(0)
-        .addImm(1);
+        .addImm(-1);
       BuildMI(MBB, I, DL, get(AMDGPU::V_CNDMASK_B32_e64), DstReg)
         .addImm(0)
         .addReg(FalseReg)
@@ -902,7 +902,7 @@ void SIInstrInfo::insertVectorSelect(MachineBasicBlock &MBB,
         .addImm(0);
       BuildMI(MBB, I, DL, get(ST.isWave32() ? AMDGPU::S_CSELECT_B32
                                             : AMDGPU::S_CSELECT_B64), SReg)
-        .addImm(1)
+        .addImm(-1)
         .addImm(0);
       BuildMI(MBB, I, DL, get(AMDGPU::V_CNDMASK_B32_e64), DstReg)
         .addImm(0)
@@ -921,7 +921,7 @@ void SIInstrInfo::insertVectorSelect(MachineBasicBlock &MBB,
       BuildMI(MBB, I, DL, get(ST.isWave32() ? AMDGPU::S_CSELECT_B32
                                             : AMDGPU::S_CSELECT_B64), SReg)
         .addImm(0)
-        .addImm(1);
+        .addImm(-1);
       BuildMI(MBB, I, DL, get(AMDGPU::V_CNDMASK_B32_e64), DstReg)
         .addImm(0)
         .addReg(FalseReg)
@@ -6232,7 +6232,11 @@ MachineInstrBuilder SIInstrInfo::getAddNoCarry(MachineBasicBlock &MBB,
   if (ST.hasAddNoCarry())
     return BuildMI(MBB, I, DL, get(AMDGPU::V_ADD_U32_e32), DestReg);
 
-  Register UnusedCarry = RS.scavengeRegister(RI.getBoolRC(), I, 0, false);
+  // If available, prefer to use vcc.
+  Register UnusedCarry = !RS.isRegUsed(AMDGPU::VCC)
+                             ? Register(RI.getVCC())
+                             : RS.scavengeRegister(RI.getBoolRC(), I, 0, false);
+
   // TODO: Users need to deal with this.
   if (!UnusedCarry.isValid())
     return MachineInstrBuilder();

@@ -1,3 +1,5 @@
+; Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
+; Notified per clause 4(b) of the license.
 ; RUN: llc -mattr=+promote-alloca -verify-machineinstrs -march=amdgcn < %s | FileCheck -check-prefix=GCN -check-prefix=GCN-PROMOTE %s
 ; RUN: llc -mattr=+promote-alloca,-flat-for-global -verify-machineinstrs -mtriple=amdgcn--amdhsa -mcpu=kaveri < %s | FileCheck -check-prefix=GCN -check-prefix=GCN-PROMOTE -check-prefix=HSA %s
 ; RUN: llc -mattr=-promote-alloca -verify-machineinstrs -march=amdgcn < %s | FileCheck -check-prefix=GCN -check-prefix=GCN-ALLOCA %s
@@ -13,14 +15,7 @@ declare i32 @llvm.amdgcn.workitem.id.x() nounwind readnone
 
 ; GCN-LABEL: {{^}}work_item_info:
 ; GCN-NOT: v0
-; GCN: s_load_dword [[IN:s[0-9]+]]
-; GCN-NOT: v0
-
-; GCN-ALLOCA: v_add_{{[iu]}}32_e32 [[RESULT:v[0-9]+]], vcc, v{{[0-9]+}}, v0
-
-; GCN-PROMOTE: v_cmp_eq_u32_e64 vcc, [[IN]], 1
-; GCN-PROMOTE-NEXT: v_addc_u32_e32 [[RESULT:v[0-9]+]], vcc, 0, v0, vcc
-
+; GCN: v_add_{{[iu]}}32_e32 [[RESULT:v[0-9]+]], vcc, v{{[0-9]+}}, v0
 ; GCN: buffer_store_dword [[RESULT]]
 define amdgpu_kernel void @work_item_info(i32 addrspace(1)* %out, i32 %in) {
 entry:

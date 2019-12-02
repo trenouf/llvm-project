@@ -3,6 +3,8 @@
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+// Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
+// Notified per clause 4(b) of the license.
 //
 //===----------------------------------------------------------------------===//
 //
@@ -61,9 +63,6 @@ R600TargetLowering::R600TargetLowering(const TargetMachine &TM,
   addRegisterClass(MVT::v2i32, &R600::R600_Reg64RegClass);
   addRegisterClass(MVT::v4f32, &R600::R600_Reg128RegClass);
   addRegisterClass(MVT::v4i32, &R600::R600_Reg128RegClass);
-
-  setBooleanContents(ZeroOrNegativeOneBooleanContent);
-  setBooleanVectorContents(ZeroOrNegativeOneBooleanContent);
 
   computeRegisterProperties(Subtarget->getRegisterInfo());
 

@@ -1,3 +1,5 @@
+; Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
+; Notified per clause 4(b) of the license.
 ; RUN: opt -mtriple=amdgcn-- -S -structurizecfg -si-annotate-control-flow %s | FileCheck -check-prefix=IR %s
 ; RUN: llc -march=amdgcn -mcpu=hawaii -verify-machineinstrs < %s | FileCheck -check-prefix=GCN %s
 
@@ -67,6 +69,7 @@
 
 ; GCN: [[BB9:BB[0-9]+_[0-9]+]]: ; %bb9
 ; GCN-NEXT: ; =>This Inner Loop Header: Depth=1
+; GCN-NEXT: s_mov_b64 vcc, vcc
 ; GCN-NEXT: s_cbranch_vccnz [[BB9]]
 define amdgpu_kernel void @reduced_nested_loop_conditions(i64 addrspace(3)* nocapture %arg) #0 {
 bb:

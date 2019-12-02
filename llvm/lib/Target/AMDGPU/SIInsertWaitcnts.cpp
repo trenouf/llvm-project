@@ -753,7 +753,10 @@ void WaitcntBrackets::determineWait(InstCounterType T, uint32_t ScoreToWait,
       // with a conservative value of 0 for the counter.
       addWait(Wait, T, 0);
     } else {
-      addWait(Wait, T, UB - ScoreToWait);
+      // If a counter has been maxed out avoid overflow by waiting for
+      // MAX(CounterType) - 1 instead.
+      uint32_t NeededWait = std::min(UB - ScoreToWait, getWaitCountMax(T) - 1);
+      addWait(Wait, T, NeededWait);
     }
   }
 }
@@ -1139,7 +1142,7 @@ bool SIInsertWaitcnts::generateWaitcntInstBefore(
         Wait.VsCnt = ~0u;
       }
 
-      LLVM_DEBUG(dbgs() << "updateWaitcntInBlock\n"
+      LLVM_DEBUG(dbgs() << "generateWaitcntInstBefore\n"
                         << "Old Instr: " << MI << '\n'
                         << "New Instr: " << *II << '\n');
 
@@ -1156,7 +1159,7 @@ bool SIInsertWaitcnts::generateWaitcntInstBefore(
     TrackedWaitcntSet.insert(SWaitInst);
     Modified = true;
 
-    LLVM_DEBUG(dbgs() << "insertWaitcntInBlock\n"
+    LLVM_DEBUG(dbgs() << "generateWaitcntInstBefore\n"
                       << "Old Instr: " << MI << '\n'
                       << "New Instr: " << *SWaitInst << '\n');
   }
@@ -1172,7 +1175,7 @@ bool SIInsertWaitcnts::generateWaitcntInstBefore(
     TrackedWaitcntSet.insert(SWaitInst);
     Modified = true;
 
-    LLVM_DEBUG(dbgs() << "insertWaitcntInBlock\n"
+    LLVM_DEBUG(dbgs() << "generateWaitcntInstBefore\n"
                       << "Old Instr: " << MI << '\n'
                       << "New Instr: " << *SWaitInst << '\n');
   }
@@ -1369,9 +1372,16 @@ bool SIInsertWaitcnts::insertWaitcntInBlock(MachineFunction &MF,
     ScoreBrackets.dump();
   });
 
-  // Assume VCCZ is correct at basic block boundaries, unless and until we need
-  // to handle cases where that is not true.
   bool VCCZCorrect = true;
+  if (ST->hasReadVCCZBug())
+    // vccz could be incorrect at a basic block boundary if a predecessor wrote
+    // to vcc and then issued an smem load.
+    VCCZCorrect = false;
+  else if (!ST->partialVCCWritesUpdateVCCZ())
+    // vccz could be incorrect at a basic block boundary if a predecessor wrote
+    // to vcc_lo or vcc_hi, but let's assume that doesn't happen unless and
+    // until we find a case where it does.
+    VCCZCorrect = true;
 
   // Walk over the instructions.
   MachineInstr *OldWaitcntInstr = nullptr;
@@ -1394,28 +1404,42 @@ bool SIInsertWaitcnts::insertWaitcntInBlock(MachineFunction &MF,
 
     bool RestoreVCCZ = false;
     if (readsVCCZ(Inst)) {
-      if (!VCCZCorrect)
+      if (!VCCZCorrect) {
+        // Restore vccz if it's not known to be correct already.
         RestoreVCCZ = true;
-      else if (ST->hasReadVCCZBug()) {
-        if (ScoreBrackets.getScoreLB(LGKM_CNT) <
-            ScoreBrackets.getScoreUB(LGKM_CNT) &&
-            ScoreBrackets.hasPendingEvent(SMEM_ACCESS)) {
-          RestoreVCCZ = true;
-        }
+      } else if (ST->hasReadVCCZBug() &&
+                 ScoreBrackets.getScoreLB(LGKM_CNT) <
+                 ScoreBrackets.getScoreUB(LGKM_CNT) &&
+                 ScoreBrackets.hasPendingEvent(SMEM_ACCESS)) {
+        // Restore vccz if there's an outstanding smem read, which could
+        // complete and clobber vccz at any time.
+        RestoreVCCZ = true;
       }
     }
 
-    if (!ST->partialVCCWritesUpdateVCCZ()) {
-      // Up to gfx9, writes to vcc_lo and vcc_hi don't update vccz.
-      // Writes to vcc will fix it. Only examine explicit defs.
+    // Don't examine operands unless we need to track vccz correctness.
+    if (ST->hasReadVCCZBug() || !ST->partialVCCWritesUpdateVCCZ()) {
+      // Only examine explicit defs.
       for (auto &Op : Inst.defs()) {
         switch (Op.getReg()) {
         case AMDGPU::VCC:
-          VCCZCorrect = true;
+          if (ST->hasReadVCCZBug() &&
+              ScoreBrackets.getScoreLB(LGKM_CNT) <
+              ScoreBrackets.getScoreUB(LGKM_CNT) &&
+              ScoreBrackets.hasPendingEvent(SMEM_ACCESS)) {
+            // Writes to vcc while there's an outstanding smem read may get
+            // clobbered as soon as any read completes.
+            VCCZCorrect = false;
+          } else {
+            // Writes to vcc will fix any incorrect value in vccz.
+            VCCZCorrect = true;
+          }
           break;
         case AMDGPU::VCC_LO:
         case AMDGPU::VCC_HI:
-          VCCZCorrect = false;
+          // Up to gfx9, writes to vcc_lo and vcc_hi don't update vccz.
+          if (!ST->partialVCCWritesUpdateVCCZ())
+            VCCZCorrect = false;
           break;
         }
       }
