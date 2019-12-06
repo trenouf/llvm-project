@@ -3,6 +3,8 @@
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+// Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
+// Notified per clause 4(b) of the license.
 //
 //===----------------------------------------------------------------------===//
 //
@@ -1397,6 +1399,20 @@ static Value *evaluateInDifferentElementOrder(Value *V, ArrayRef<int> Mask) {
   llvm_unreachable("failed to reorder elements of vector instruction!");
 }
 
+static void recognizeIdentityMask(const SmallVectorImpl<int> &Mask,
+                                  bool &isLHSID, bool &isRHSID) {
+  isLHSID = isRHSID = true;
+
+  for (unsigned i = 0, e = Mask.size(); i != e; ++i) {
+    if (Mask[i] < 0) continue;  // Ignore undef values.
+    // Is this an identity shuffle of the LHS value?
+    isLHSID &= (Mask[i] == (int)i);
+
+    // Is this an identity shuffle of the RHS value?
+    isRHSID &= (Mask[i]-e == i);
+  }
+}
+
 // Returns true if the shuffle is extracting a contiguous range of values from
 // LHS, for example:
 //                 +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
@@ -1940,6 +1956,16 @@ Instruction *InstCombiner::visitShuffleVectorInst(ShuffleVectorInst &SVI) {
     return I;
   if (Instruction *I = foldIdentityPaddedShuffles(SVI))
     return I;
+
+  if (VWidth == LHSWidth) {
+    // Analyze the shuffle, are the LHS or RHS and identity shuffles?
+    bool isLHSID, isRHSID;
+    recognizeIdentityMask(Mask, isLHSID, isRHSID);
+
+    // Eliminate identity shuffles.
+    if (isLHSID) return replaceInstUsesWith(SVI, LHS);
+    if (isRHSID) return replaceInstUsesWith(SVI, RHS);
+  }
 
   if (isa<UndefValue>(RHS) && canEvaluateShuffled(LHS, Mask)) {
     Value *V = evaluateInDifferentElementOrder(LHS, Mask);

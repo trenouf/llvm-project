@@ -3,6 +3,8 @@
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+// Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
+// Notified per clause 4(b) of the license.
 //
 //===----------------------------------------------------------------------===//
 //
@@ -1273,30 +1275,6 @@ Value *InstCombiner::SimplifyDemandedVectorElts(Value *V, APInt DemandedElts,
 
     APInt RHSUndefElts(OpWidth, 0);
     simplifyAndSetOp(I, 1, RightDemanded, RHSUndefElts);
-
-    // If this shuffle does not change the vector length and the elements
-    // demanded by this shuffle are an identity mask, then this shuffle is
-    // unnecessary.
-    //
-    // We are assuming canonical form for the mask, so the source vector is
-    // operand 0 and operand 1 is not used.
-    //
-    // Note that if an element is demanded and this shuffle mask is undefined
-    // for that element, then the shuffle is not considered an identity
-    // operation. The shuffle prevents poison from the operand vector from
-    // leaking to the result by replacing poison with an undefined value.
-    if (VWidth == OpWidth) {
-      bool IsIdentityShuffle = true;
-      for (unsigned i = 0; i < VWidth; i++) {
-        unsigned MaskVal = Shuffle->getMaskValue(i);
-        if (DemandedElts[i] && i != MaskVal) {
-          IsIdentityShuffle = false;
-          break;
-        }
-      }
-      if (IsIdentityShuffle)
-        return Shuffle->getOperand(0);
-    }
 
     bool NewUndefElts = false;
     unsigned LHSIdx = -1u, LHSValIdx = -1u;
