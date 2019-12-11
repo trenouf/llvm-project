@@ -26,6 +26,8 @@ namespace readability {
 /// It also supports a fixed prefix and suffix that will be prepended or
 /// appended to the identifiers, regardless of the casing.
 ///
+/// It also supports removal of one of a list of prefixes.
+///
 /// Many configuration options are available, in order to be able to create
 /// different rules for different kind of identifier. In general, the
 /// rules are falling back to a more generic rule if the specific case is not
@@ -51,12 +53,16 @@ public:
     NamingStyle() = default;
 
     NamingStyle(llvm::Optional<CaseType> Case, const std::string &Prefix,
-                const std::string &Suffix)
-        : Case(Case), Prefix(Prefix), Suffix(Suffix) {}
+                const std::string &Suffix, const std::string &RemovePrefixes,
+                const std::string &IgnoreRegex)
+        : Case(Case), Prefix(Prefix), Suffix(Suffix),
+          RemovePrefixes(RemovePrefixes), IgnoreRegex(IgnoreRegex) {}
 
     llvm::Optional<CaseType> Case;
     std::string Prefix;
     std::string Suffix;
+    std::string RemovePrefixes;
+    std::string IgnoreRegex;
   };
 
 private:

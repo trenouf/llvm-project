@@ -13,6 +13,7 @@
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Lex/PPCallbacks.h"
 #include "clang/Lex/Preprocessor.h"
+#include "clang/Tooling/FixIt.h"
 #include "llvm/ADT/DenseMapInfo.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/Format.h"
@@ -258,6 +259,18 @@ void RenamerClangTidyCheck::check(const MatchFinder::MatchResult &Result) {
 
   if (const auto *DeclRef = Result.Nodes.getNodeAs<DeclRefExpr>("declRef")) {
     SourceRange Range = DeclRef->getNameInfo().getSourceRange();
+
+    // Check for the case that the source location is not actually the name of
+    // the decl, because it is referenced by an implicit lambda capture. 
+    // Without this, we would accidentally generate a fixit that modifies the
+    // '=' or '&' to the name of the decl.
+    if (DeclRef->getDecl()->getIdentifier() &&
+        DeclRef->getDecl()->getName() !=
+            tooling::fixit::internal::getText(
+                tooling::fixit::internal::getSourceRange(Range),
+                DeclRef->getDecl()->getASTContext()))
+      return;
+
     addUsage(NamingCheckFailures, DeclRef->getDecl(), Range,
              Result.SourceManager);
     return;
