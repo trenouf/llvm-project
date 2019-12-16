@@ -453,9 +453,6 @@ AMDGPUTargetLowering::AMDGPUTargetLowering(const TargetMachine &TM,
   for (int I = 0; I < RTLIB::UNKNOWN_LIBCALL; ++I)
     setLibcallName(static_cast<RTLIB::Libcall>(I), nullptr);
 
-  setBooleanContents(ZeroOrNegativeOneBooleanContent);
-  setBooleanVectorContents(ZeroOrNegativeOneBooleanContent);
-
   setSchedulingPreference(Sched::RegPressure);
   setJumpIsExpensive(true);
 
@@ -3591,8 +3588,8 @@ SDValue AMDGPUTargetLowering::performSelectCombine(SDNode *N,
       // select (setcc x, y), k, x -> select (setccinv x, y), x, k
 
       SDLoc SL(N);
-      ISD::CondCode NewCC = getSetCCInverse(cast<CondCodeSDNode>(CC)->get(),
-                                            LHS.getValueType().isInteger());
+      ISD::CondCode NewCC =
+          getSetCCInverse(cast<CondCodeSDNode>(CC)->get(), LHS.getValueType());
 
       SDValue NewCond = DAG.getSetCC(SL, Cond.getValueType(), LHS, RHS, NewCC);
       return DAG.getNode(ISD::SELECT, SL, VT, NewCond, False, True);
