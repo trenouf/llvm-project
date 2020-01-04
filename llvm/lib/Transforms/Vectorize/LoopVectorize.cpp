@@ -134,7 +134,6 @@
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
-#include "llvm/Transforms/Utils/InjectTLIMappings.h"
 #include "llvm/Transforms/Utils/LoopSimplify.h"
 #include "llvm/Transforms/Utils/LoopUtils.h"
 #include "llvm/Transforms/Utils/LoopVersioning.h"
@@ -532,6 +531,9 @@ protected:
   /// vectorizing this phi node.
   void fixReduction(PHINode *Phi);
 
+  /// Clear NSW/NUW flags from reduction instructions if necessary.
+  void clearReductionWrapFlags(RecurrenceDescriptor &RdxDesc);
+
   /// The Loop exit block may have single value PHI nodes with some
   /// incoming value. While vectorizing we only handled real values
   /// that were defined inside the loop and we should have one value for
@@ -545,10 +547,6 @@ protected:
   /// Shrinks vector element sizes to the smallest bitwidth they can be legally
   /// represented as.
   void truncateToMinimalBitwidths();
-
-  /// Insert the new loop to the loop hierarchy and pass manager
-  /// and update the analysis passes.
-  void updateAnalysis();
 
   /// Create a broadcast instruction. This method generates a broadcast
   /// instruction (shuffle) for loop invariant values and for the induction
@@ -1211,14 +1209,14 @@ public:
 
   /// Returns true if the target machine supports masked scatter operation
   /// for the given \p DataType.
-  bool isLegalMaskedScatter(Type *DataType) {
-    return TTI.isLegalMaskedScatter(DataType);
+  bool isLegalMaskedScatter(Type *DataType, MaybeAlign Alignment) {
+    return TTI.isLegalMaskedScatter(DataType, Alignment);
   }
 
   /// Returns true if the target machine supports masked gather operation
   /// for the given \p DataType.
-  bool isLegalMaskedGather(Type *DataType) {
-    return TTI.isLegalMaskedGather(DataType);
+  bool isLegalMaskedGather(Type *DataType, MaybeAlign Alignment) {
+    return TTI.isLegalMaskedGather(DataType, Alignment);
   }
 
   /// Returns true if the target machine can represent \p V as a masked gather
@@ -1229,7 +1227,9 @@ public:
     if (!LI && !SI)
       return false;
     auto *Ty = getMemInstValueType(V);
-    return (LI && isLegalMaskedGather(Ty)) || (SI && isLegalMaskedScatter(Ty));
+    MaybeAlign Align = getLoadStoreAlignment(V);
+    return (LI && isLegalMaskedGather(Ty, Align)) ||
+           (SI && isLegalMaskedScatter(Ty, Align));
   }
 
   /// Returns true if \p I is an instruction that will be scalarized with
@@ -1635,7 +1635,6 @@ struct LoopVectorize : public FunctionPass {
     AU.addRequired<LoopAccessLegacyAnalysis>();
     AU.addRequired<DemandedBitsWrapperPass>();
     AU.addRequired<OptimizationRemarkEmitterWrapperPass>();
-    AU.addRequired<InjectTLIMappingsLegacy>();
 
     // We currently do not preserve loopinfo/dominator analyses with outer loop
     // vectorization. Until this is addressed, mark these analyses as preserved
@@ -2684,8 +2683,10 @@ Value *InnerLoopVectorizer::createBitOrPointerCast(Value *V, VectorType *DstVTy,
 void InnerLoopVectorizer::emitMinimumIterationCountCheck(Loop *L,
                                                          BasicBlock *Bypass) {
   Value *Count = getOrCreateTripCount(L);
-  BasicBlock *BB = L->getLoopPreheader();
-  IRBuilder<> Builder(BB->getTerminator());
+  // Reuse existing vector loop preheader for TC checks.
+  // Note that new preheader block is generated for vector loop.
+  BasicBlock *const TCCheckBlock = LoopVectorPreHeader;
+  IRBuilder<> Builder(TCCheckBlock->getTerminator());
 
   // Generate code to check if the loop's trip count is less than VF * UF, or
   // equal to it in case a scalar epilogue is required; this implies that the
@@ -2702,48 +2703,61 @@ void InnerLoopVectorizer::emitMinimumIterationCountCheck(Loop *L,
         P, Count, ConstantInt::get(Count->getType(), VF * UF),
         "min.iters.check");
 
-  BasicBlock *NewBB = BB->splitBasicBlock(BB->getTerminator(), "vector.ph");
-  // Update dominator tree immediately if the generated block is a
-  // LoopBypassBlock because SCEV expansions to generate loop bypass
-  // checks may query it before the current function is finished.
-  DT->addNewBlock(NewBB, BB);
-  if (L->getParentLoop())
-    L->getParentLoop()->addBasicBlockToLoop(NewBB, *LI);
-  ReplaceInstWithInst(BB->getTerminator(),
-                      BranchInst::Create(Bypass, NewBB, CheckMinIters));
-  LoopBypassBlocks.push_back(BB);
+  // Create new preheader for vector loop.
+  LoopVectorPreHeader =
+      SplitBlock(TCCheckBlock, TCCheckBlock->getTerminator(), DT, LI, nullptr,
+                 "vector.ph");
+
+  assert(DT->properlyDominates(DT->getNode(TCCheckBlock),
+                               DT->getNode(Bypass)->getIDom()) &&
+         "TC check is expected to dominate Bypass");
+
+  // Update dominator for Bypass & LoopExit.
+  DT->changeImmediateDominator(Bypass, TCCheckBlock);
+  DT->changeImmediateDominator(LoopExitBlock, TCCheckBlock);
+
+  ReplaceInstWithInst(
+      TCCheckBlock->getTerminator(),
+      BranchInst::Create(Bypass, LoopVectorPreHeader, CheckMinIters));
+  LoopBypassBlocks.push_back(TCCheckBlock);
 }
 
 void InnerLoopVectorizer::emitSCEVChecks(Loop *L, BasicBlock *Bypass) {
-  BasicBlock *BB = L->getLoopPreheader();
+  // Reuse existing vector loop preheader for SCEV checks.
+  // Note that new preheader block is generated for vector loop.
+  BasicBlock *const SCEVCheckBlock = LoopVectorPreHeader;
 
   // Generate the code to check that the SCEV assumptions that we made.
   // We want the new basic block to start at the first instruction in a
   // sequence of instructions that form a check.
   SCEVExpander Exp(*PSE.getSE(), Bypass->getModule()->getDataLayout(),
                    "scev.check");
-  Value *SCEVCheck =
-      Exp.expandCodeForPredicate(&PSE.getUnionPredicate(), BB->getTerminator());
+  Value *SCEVCheck = Exp.expandCodeForPredicate(
+      &PSE.getUnionPredicate(), SCEVCheckBlock->getTerminator());
 
   if (auto *C = dyn_cast<ConstantInt>(SCEVCheck))
     if (C->isZero())
       return;
 
-  assert(!BB->getParent()->hasOptSize() &&
+  assert(!SCEVCheckBlock->getParent()->hasOptSize() &&
          "Cannot SCEV check stride or overflow when optimizing for size");
 
-  // Create a new block containing the stride check.
-  BB->setName("vector.scevcheck");
-  auto *NewBB = BB->splitBasicBlock(BB->getTerminator(), "vector.ph");
-  // Update dominator tree immediately if the generated block is a
-  // LoopBypassBlock because SCEV expansions to generate loop bypass
-  // checks may query it before the current function is finished.
-  DT->addNewBlock(NewBB, BB);
-  if (L->getParentLoop())
-    L->getParentLoop()->addBasicBlockToLoop(NewBB, *LI);
-  ReplaceInstWithInst(BB->getTerminator(),
-                      BranchInst::Create(Bypass, NewBB, SCEVCheck));
-  LoopBypassBlocks.push_back(BB);
+  SCEVCheckBlock->setName("vector.scevcheck");
+  // Create new preheader for vector loop.
+  LoopVectorPreHeader =
+      SplitBlock(SCEVCheckBlock, SCEVCheckBlock->getTerminator(), DT, LI,
+                 nullptr, "vector.ph");
+
+  // Update dominator only if this is first RT check.
+  if (LoopBypassBlocks.empty()) {
+    DT->changeImmediateDominator(Bypass, SCEVCheckBlock);
+    DT->changeImmediateDominator(LoopExitBlock, SCEVCheckBlock);
+  }
+
+  ReplaceInstWithInst(
+      SCEVCheckBlock->getTerminator(),
+      BranchInst::Create(Bypass, LoopVectorPreHeader, SCEVCheck));
+  LoopBypassBlocks.push_back(SCEVCheckBlock);
   AddedSafetyChecks = true;
 }
 
@@ -2752,7 +2766,9 @@ void InnerLoopVectorizer::emitMemRuntimeChecks(Loop *L, BasicBlock *Bypass) {
   if (EnableVPlanNativePath)
     return;
 
-  BasicBlock *BB = L->getLoopPreheader();
+  // Reuse existing vector loop preheader for runtime memory checks.
+  // Note that new preheader block is generated for vector loop.
+  BasicBlock *const MemCheckBlock = L->getLoopPreheader();
 
   // Generate the code that checks in runtime if arrays overlap. We put the
   // checks into a separate block to make the more common case of few elements
@@ -2760,11 +2776,11 @@ void InnerLoopVectorizer::emitMemRuntimeChecks(Loop *L, BasicBlock *Bypass) {
   Instruction *FirstCheckInst;
   Instruction *MemRuntimeCheck;
   std::tie(FirstCheckInst, MemRuntimeCheck) =
-      Legal->getLAI()->addRuntimeChecks(BB->getTerminator());
+      Legal->getLAI()->addRuntimeChecks(MemCheckBlock->getTerminator());
   if (!MemRuntimeCheck)
     return;
 
-  if (BB->getParent()->hasOptSize()) {
+  if (MemCheckBlock->getParent()->hasOptSize()) {
     assert(Cost->Hints->getForce() == LoopVectorizeHints::FK_Enabled &&
            "Cannot emit memory checks when optimizing for size, unless forced "
            "to vectorize.");
@@ -2778,24 +2794,28 @@ void InnerLoopVectorizer::emitMemRuntimeChecks(Loop *L, BasicBlock *Bypass) {
     });
   }
 
-  // Create a new block containing the memory check.
-  BB->setName("vector.memcheck");
-  auto *NewBB = BB->splitBasicBlock(BB->getTerminator(), "vector.ph");
-  // Update dominator tree immediately if the generated block is a
-  // LoopBypassBlock because SCEV expansions to generate loop bypass
-  // checks may query it before the current function is finished.
-  DT->addNewBlock(NewBB, BB);
-  if (L->getParentLoop())
-    L->getParentLoop()->addBasicBlockToLoop(NewBB, *LI);
-  ReplaceInstWithInst(BB->getTerminator(),
-                      BranchInst::Create(Bypass, NewBB, MemRuntimeCheck));
-  LoopBypassBlocks.push_back(BB);
+  MemCheckBlock->setName("vector.memcheck");
+  // Create new preheader for vector loop.
+  LoopVectorPreHeader =
+      SplitBlock(MemCheckBlock, MemCheckBlock->getTerminator(), DT, LI, nullptr,
+                 "vector.ph");
+
+  // Update dominator only if this is first RT check.
+  if (LoopBypassBlocks.empty()) {
+    DT->changeImmediateDominator(Bypass, MemCheckBlock);
+    DT->changeImmediateDominator(LoopExitBlock, MemCheckBlock);
+  }
+
+  ReplaceInstWithInst(
+      MemCheckBlock->getTerminator(),
+      BranchInst::Create(Bypass, LoopVectorPreHeader, MemRuntimeCheck));
+  LoopBypassBlocks.push_back(MemCheckBlock);
   AddedSafetyChecks = true;
 
   // We currently don't use LoopVersioning for the actual loop cloning but we
   // still use it to add the noalias metadata.
   LVer = std::make_unique<LoopVersioning>(*Legal->getLAI(), OrigLoop, LI, DT,
-                                           PSE.getSE());
+                                          PSE.getSE());
   LVer->prepareNoAliasMetadata();
 }
 
@@ -2920,12 +2940,7 @@ BasicBlock *InnerLoopVectorizer::createVectorizedLoopSkeleton() {
    ...
    */
 
-  BasicBlock *OldBasicBlock = OrigLoop->getHeader();
-  BasicBlock *VectorPH = OrigLoop->getLoopPreheader();
-  BasicBlock *ExitBlock = OrigLoop->getExitBlock();
   MDNode *OrigLoopID = OrigLoop->getLoopID();
-  assert(VectorPH && "Invalid loop structure");
-  assert(ExitBlock && "Must have an exit block");
 
   // Some loops have a single integer induction variable, while other loops
   // don't. One example is c++ iterators that often have multiple pointer
@@ -2942,12 +2957,27 @@ BasicBlock *InnerLoopVectorizer::createVectorizedLoopSkeleton() {
   Type *IdxTy = Legal->getWidestInductionType();
 
   // Split the single block loop into the two loop structure described above.
-  BasicBlock *VecBody =
-      VectorPH->splitBasicBlock(VectorPH->getTerminator(), "vector.body");
-  BasicBlock *MiddleBlock =
-      VecBody->splitBasicBlock(VecBody->getTerminator(), "middle.block");
-  BasicBlock *ScalarPH =
-      MiddleBlock->splitBasicBlock(MiddleBlock->getTerminator(), "scalar.ph");
+  LoopScalarBody = OrigLoop->getHeader();
+  LoopVectorPreHeader = OrigLoop->getLoopPreheader();
+  LoopExitBlock = OrigLoop->getExitBlock();
+  assert(LoopExitBlock && "Must have an exit block");
+  assert(LoopVectorPreHeader && "Invalid loop structure");
+
+  LoopMiddleBlock =
+      SplitBlock(LoopVectorPreHeader, LoopVectorPreHeader->getTerminator(), DT,
+                 LI, nullptr, "middle.block");
+  LoopScalarPreHeader =
+      SplitBlock(LoopMiddleBlock, LoopMiddleBlock->getTerminator(), DT, LI,
+                 nullptr, "scalar.ph");
+  // We intentionally don't let SplitBlock to update LoopInfo since
+  // LoopVectorBody should belong to another loop than LoopVectorPreHeader.
+  // LoopVectorBody is explicitly added to the correct place few lines later.
+  LoopVectorBody =
+      SplitBlock(LoopVectorPreHeader, LoopVectorPreHeader->getTerminator(), DT,
+                 nullptr, nullptr, "vector.body");
+
+  // Update dominator for loop exit.
+  DT->changeImmediateDominator(LoopExitBlock, LoopMiddleBlock);
 
   // Create and register the new vector loop.
   Loop *Lp = LI->AllocateLoop();
@@ -2957,12 +2987,10 @@ BasicBlock *InnerLoopVectorizer::createVectorizedLoopSkeleton() {
   // before calling any utilities such as SCEV that require valid LoopInfo.
   if (ParentLoop) {
     ParentLoop->addChildLoop(Lp);
-    ParentLoop->addBasicBlockToLoop(ScalarPH, *LI);
-    ParentLoop->addBasicBlockToLoop(MiddleBlock, *LI);
   } else {
     LI->addTopLevelLoop(Lp);
   }
-  Lp->addBasicBlockToLoop(VecBody, *LI);
+  Lp->addBasicBlockToLoop(LoopVectorBody, *LI);
 
   // Find the loop boundaries.
   Value *Count = getOrCreateTripCount(Lp);
@@ -2974,16 +3002,16 @@ BasicBlock *InnerLoopVectorizer::createVectorizedLoopSkeleton() {
   // backedge-taken count is uint##_max: adding one to it will overflow leading
   // to an incorrect trip count of zero. In this (rare) case we will also jump
   // to the scalar loop.
-  emitMinimumIterationCountCheck(Lp, ScalarPH);
+  emitMinimumIterationCountCheck(Lp, LoopScalarPreHeader);
 
   // Generate the code to check any assumptions that we've made for SCEV
   // expressions.
-  emitSCEVChecks(Lp, ScalarPH);
+  emitSCEVChecks(Lp, LoopScalarPreHeader);
 
   // Generate the code that checks in runtime if arrays overlap. We put the
   // checks into a separate block to make the more common case of few elements
   // faster.
-  emitMemRuntimeChecks(Lp, ScalarPH);
+  emitMemRuntimeChecks(Lp, LoopScalarPreHeader);
 
   // Generate the induction variable.
   // The loop step is equal to the vectorization factor (num of SIMD elements)
@@ -3011,8 +3039,9 @@ BasicBlock *InnerLoopVectorizer::createVectorizedLoopSkeleton() {
     InductionDescriptor II = InductionEntry.second;
 
     // Create phi nodes to merge from the  backedge-taken check block.
-    PHINode *BCResumeVal = PHINode::Create(
-        OrigPhi->getType(), 3, "bc.resume.val", ScalarPH->getTerminator());
+    PHINode *BCResumeVal =
+        PHINode::Create(OrigPhi->getType(), 3, "bc.resume.val",
+                        LoopScalarPreHeader->getTerminator());
     // Copy original phi DL over to the new one.
     BCResumeVal->setDebugLoc(OrigPhi->getDebugLoc());
     Value *&EndValue = IVEndValues[OrigPhi];
@@ -3023,23 +3052,23 @@ BasicBlock *InnerLoopVectorizer::createVectorizedLoopSkeleton() {
       IRBuilder<> B(Lp->getLoopPreheader()->getTerminator());
       Type *StepType = II.getStep()->getType();
       Instruction::CastOps CastOp =
-        CastInst::getCastOpcode(CountRoundDown, true, StepType, true);
+          CastInst::getCastOpcode(CountRoundDown, true, StepType, true);
       Value *CRD = B.CreateCast(CastOp, CountRoundDown, StepType, "cast.crd");
-      const DataLayout &DL = OrigLoop->getHeader()->getModule()->getDataLayout();
+      const DataLayout &DL = LoopScalarBody->getModule()->getDataLayout();
       EndValue = emitTransformedIndex(B, CRD, PSE.getSE(), DL, II);
       EndValue->setName("ind.end");
     }
 
     // The new PHI merges the original incoming value, in case of a bypass,
     // or the value at the end of the vectorized loop.
-    BCResumeVal->addIncoming(EndValue, MiddleBlock);
+    BCResumeVal->addIncoming(EndValue, LoopMiddleBlock);
 
     // Fix the scalar body counter (PHI node).
     // The old induction's phi node in the scalar body needs the truncated
     // value.
     for (BasicBlock *BB : LoopBypassBlocks)
       BCResumeVal->addIncoming(II.getStartValue(), BB);
-    OrigPhi->setIncomingValueForBlock(ScalarPH, BCResumeVal);
+    OrigPhi->setIncomingValueForBlock(LoopScalarPreHeader, BCResumeVal);
   }
 
   // We need the OrigLoop (scalar loop part) latch terminator to help
@@ -3057,9 +3086,9 @@ BasicBlock *InnerLoopVectorizer::createVectorizedLoopSkeleton() {
   // If tail is to be folded, we know we don't need to run the remainder.
   Value *CmpN = Builder.getTrue();
   if (!Cost->foldTailByMasking()) {
-    CmpN =
-        CmpInst::Create(Instruction::ICmp, CmpInst::ICMP_EQ, Count,
-                        CountRoundDown, "cmp.n", MiddleBlock->getTerminator());
+    CmpN = CmpInst::Create(Instruction::ICmp, CmpInst::ICMP_EQ, Count,
+                           CountRoundDown, "cmp.n",
+                           LoopMiddleBlock->getTerminator());
 
     // Here we use the same DebugLoc as the scalar loop latch branch instead
     // of the corresponding compare because they may have ended up with
@@ -3068,20 +3097,15 @@ BasicBlock *InnerLoopVectorizer::createVectorizedLoopSkeleton() {
     cast<Instruction>(CmpN)->setDebugLoc(ScalarLatchBr->getDebugLoc());
   }
 
-  BranchInst *BrInst = BranchInst::Create(ExitBlock, ScalarPH, CmpN);
+  BranchInst *BrInst =
+      BranchInst::Create(LoopExitBlock, LoopScalarPreHeader, CmpN);
   BrInst->setDebugLoc(ScalarLatchBr->getDebugLoc());
-  ReplaceInstWithInst(MiddleBlock->getTerminator(), BrInst);
+  ReplaceInstWithInst(LoopMiddleBlock->getTerminator(), BrInst);
 
   // Get ready to start creating new instructions into the vectorized body.
-  Builder.SetInsertPoint(&*VecBody->getFirstInsertionPt());
-
-  // Save the state.
-  LoopVectorPreHeader = Lp->getLoopPreheader();
-  LoopScalarPreHeader = ScalarPH;
-  LoopMiddleBlock = MiddleBlock;
-  LoopExitBlock = ExitBlock;
-  LoopVectorBody = VecBody;
-  LoopScalarBody = OldBasicBlock;
+  assert(LoopVectorPreHeader == Lp->getLoopPreheader() &&
+         "Inconsistent vector loop preheader");
+  Builder.SetInsertPoint(&*LoopVectorBody->getFirstInsertionPt());
 
   Optional<MDNode *> VectorizedLoopID =
       makeFollowupLoopID(OrigLoopID, {LLVMLoopVectorizeFollowupAll,
@@ -3101,6 +3125,11 @@ BasicBlock *InnerLoopVectorizer::createVectorizedLoopSkeleton() {
 
   LoopVectorizeHints Hints(Lp, true, *ORE);
   Hints.setAlreadyVectorized();
+
+#ifdef EXPENSIVE_CHECKS
+  assert(DT->verify(DominatorTree::VerificationLevel::Fast));
+  LI->verify(*DT);
+#endif
 
   return LoopVectorPreHeader;
 }
@@ -3228,6 +3257,7 @@ unsigned LoopVectorizationCostModel::getVectorCallCost(CallInst *CI,
                                                        unsigned VF,
                                                        bool &NeedToScalarize) {
   Function *F = CI->getCalledFunction();
+  StringRef FnName = CI->getCalledFunction()->getName();
   Type *ScalarRetTy = CI->getType();
   SmallVector<Type *, 4> Tys, ScalarTys;
   for (auto &ArgOp : CI->arg_operands())
@@ -3255,9 +3285,7 @@ unsigned LoopVectorizationCostModel::getVectorCallCost(CallInst *CI,
   // If we can't emit a vector call for this function, then the currently found
   // cost is the cost we need to return.
   NeedToScalarize = true;
-  if (!TLI || CI->isNoBuiltin() ||
-      !VFDatabase(*CI).isFunctionVectorizable(
-          VFShape::get(*CI, {VF, false} /*EC*/, false /*HasGlobalPred*/)))
+  if (!TLI || !TLI->isFunctionVectorizable(FnName, VF) || CI->isNoBuiltin())
     return Cost;
 
   // If the corresponding vector cost is cheaper, return its cost.
@@ -3438,15 +3466,8 @@ void InnerLoopVectorizer::fixVectorizedLoop() {
   // This is the second stage of vectorizing recurrences.
   fixCrossIterationPHIs();
 
-  // Update the dominator tree.
-  //
-  // FIXME: After creating the structure of the new loop, the dominator tree is
-  //        no longer up-to-date, and it remains that way until we update it
-  //        here. An out-of-date dominator tree is problematic for SCEV,
-  //        because SCEVExpander uses it to guide code generation. The
-  //        vectorizer use SCEVExpanders in several places. Instead, we should
-  //        keep the dominator tree up-to-date as we go.
-  updateAnalysis();
+  // Forget the original basic block.
+  PSE.getSE()->forgetLoop(OrigLoop);
 
   // Fix-up external users of the induction variables.
   for (auto &Entry : *Legal->getInductionVars())
@@ -3712,16 +3733,20 @@ void InnerLoopVectorizer::fixReduction(PHINode *Phi) {
     }
   }
 
+  // Wrap flags are in general invalid after vectorization, clear them.
+  clearReductionWrapFlags(RdxDesc);
+
   // Fix the vector-loop phi.
 
   // Reductions do not have to start at zero. They can start with
   // any loop invariant values.
   BasicBlock *Latch = OrigLoop->getLoopLatch();
   Value *LoopVal = Phi->getIncomingValueForBlock(Latch);
+
   for (unsigned Part = 0; Part < UF; ++Part) {
     Value *VecRdxPhi = getOrCreateVectorValue(Phi, Part);
     Value *Val = getOrCreateVectorValue(LoopVal, Part);
-    // Make sure to add the reduction stat value only to the
+    // Make sure to add the reduction start value only to the
     // first unroll part.
     Value *StartVal = (Part == 0) ? VectorStart : Identity;
     cast<PHINode>(VecRdxPhi)->addIncoming(StartVal, LoopVectorPreHeader);
@@ -3856,6 +3881,37 @@ void InnerLoopVectorizer::fixReduction(PHINode *Phi) {
   int SelfEdgeBlockIdx = (IncomingEdgeBlockIdx ? 0 : 1);
   Phi->setIncomingValue(SelfEdgeBlockIdx, BCBlockPhi);
   Phi->setIncomingValue(IncomingEdgeBlockIdx, LoopExitInst);
+}
+
+void InnerLoopVectorizer::clearReductionWrapFlags(
+    RecurrenceDescriptor &RdxDesc) {
+  RecurrenceDescriptor::RecurrenceKind RK = RdxDesc.getRecurrenceKind();
+  if (RK != RecurrenceDescriptor::RK_IntegerAdd &&
+      RK != RecurrenceDescriptor::RK_IntegerMult)
+    return;
+
+  Instruction *LoopExitInstr = RdxDesc.getLoopExitInstr();
+  assert(LoopExitInstr && "null loop exit instruction");
+  SmallVector<Instruction *, 8> Worklist;
+  SmallPtrSet<Instruction *, 8> Visited;
+  Worklist.push_back(LoopExitInstr);
+  Visited.insert(LoopExitInstr);
+
+  while (!Worklist.empty()) {
+    Instruction *Cur = Worklist.pop_back_val();
+    if (isa<OverflowingBinaryOperator>(Cur))
+      for (unsigned Part = 0; Part < UF; ++Part) {
+        Value *V = getOrCreateVectorValue(Cur, Part);
+        cast<Instruction>(V)->dropPoisonGeneratingFlags();
+      }
+
+    for (User *U : Cur->users()) {
+      Instruction *UI = cast<Instruction>(U);
+      if ((Cur != LoopExitInstr || OrigLoop->contains(UI->getParent())) &&
+          Visited.insert(UI).second)
+        Worklist.push_back(UI);
+    }
+  }
 }
 
 void InnerLoopVectorizer::fixLCSSAPHIs() {
@@ -4282,6 +4338,9 @@ void InnerLoopVectorizer::widenInstruction(Instruction &I) {
     Module *M = I.getParent()->getParent()->getParent();
     auto *CI = cast<CallInst>(&I);
 
+    StringRef FnName = CI->getCalledFunction()->getName();
+    Function *F = CI->getCalledFunction();
+    Type *RetTy = ToVectorTy(CI->getType(), VF);
     SmallVector<Type *, 4> Tys;
     for (Value *ArgOperand : CI->arg_operands())
       Tys.push_back(ToVectorTy(ArgOperand->getType(), VF));
@@ -4317,18 +4376,17 @@ void InnerLoopVectorizer::widenInstruction(Instruction &I) {
           TysForDecl[0] = VectorType::get(CI->getType()->getScalarType(), VF);
         VectorF = Intrinsic::getDeclaration(M, ID, TysForDecl);
       } else {
-        // Use vector version of the function call.
-        const VFShape Shape =
-            VFShape::get(*CI, {VF, false} /*EC*/, false /*HasGlobalPred*/);
-#ifndef NDEBUG
-        const SmallVector<VFInfo, 8> Infos = VFDatabase::getMappings(*CI);
-        assert(std::find_if(Infos.begin(), Infos.end(),
-                            [&Shape](const VFInfo &Info) {
-                              return Info.Shape == Shape;
-                            }) != Infos.end() &&
-               "Vector function shape is missing from the database.");
-#endif
-        VectorF = VFDatabase(*CI).getVectorizedFunction(Shape);
+        // Use vector version of the library call.
+        StringRef VFnName = TLI->getVectorizedFunction(FnName, VF);
+        assert(!VFnName.empty() && "Vector function name is empty.");
+        VectorF = M->getFunction(VFnName);
+        if (!VectorF) {
+          // Generate a declaration
+          FunctionType *FTy = FunctionType::get(RetTy, Tys, false);
+          VectorF =
+              Function::Create(FTy, Function::ExternalLinkage, VFnName, M);
+          VectorF->copyAttributesFrom(F);
+        }
       }
       assert(VectorF && "Can't create vector function.");
 
@@ -4351,26 +4409,6 @@ void InnerLoopVectorizer::widenInstruction(Instruction &I) {
     LLVM_DEBUG(dbgs() << "LV: Found an unhandled instruction: " << I);
     llvm_unreachable("Unhandled instruction!");
   } // end of switch.
-}
-
-void InnerLoopVectorizer::updateAnalysis() {
-  // Forget the original basic block.
-  PSE.getSE()->forgetLoop(OrigLoop);
-
-  // DT is not kept up-to-date for outer loop vectorization
-  if (EnableVPlanNativePath)
-    return;
-
-  // Update the dominator tree information.
-  assert(DT->properlyDominates(LoopBypassBlocks.front(), LoopExitBlock) &&
-         "Entry does not dominate exit.");
-
-  DT->addNewBlock(LoopMiddleBlock,
-                  LI->getLoopFor(LoopVectorBody)->getLoopLatch());
-  DT->addNewBlock(LoopScalarPreHeader, LoopBypassBlocks[0]);
-  DT->changeImmediateDominator(LoopScalarBody, LoopScalarPreHeader);
-  DT->changeImmediateDominator(LoopExitBlock, LoopBypassBlocks[0]);
-  assert(DT->verify(DominatorTree::VerificationLevel::Fast));
 }
 
 void LoopVectorizationCostModel::collectLoopScalars(unsigned VF) {
@@ -4580,9 +4618,10 @@ bool LoopVectorizationCostModel::isScalarWithPredication(Instruction *I, unsigne
       return WideningDecision == CM_Scalarize;
     }
     const MaybeAlign Alignment = getLoadStoreAlignment(I);
-    return isa<LoadInst>(I) ?
-        !(isLegalMaskedLoad(Ty, Ptr, Alignment) || isLegalMaskedGather(Ty))
-      : !(isLegalMaskedStore(Ty, Ptr, Alignment) || isLegalMaskedScatter(Ty));
+    return isa<LoadInst>(I) ? !(isLegalMaskedLoad(Ty, Ptr, Alignment) ||
+                                isLegalMaskedGather(Ty, Alignment))
+                            : !(isLegalMaskedStore(Ty, Ptr, Alignment) ||
+                                isLegalMaskedScatter(Ty, Alignment));
   }
   case Instruction::UDiv:
   case Instruction::SDiv:
@@ -6357,7 +6396,6 @@ INITIALIZE_PASS_DEPENDENCY(LoopAccessLegacyAnalysis)
 INITIALIZE_PASS_DEPENDENCY(DemandedBitsWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(OptimizationRemarkEmitterWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(ProfileSummaryInfoWrapperPass)
-INITIALIZE_PASS_DEPENDENCY(InjectTLIMappingsLegacy)
 INITIALIZE_PASS_END(LoopVectorize, LV_NAME, lv_name, false, false)
 
 namespace llvm {

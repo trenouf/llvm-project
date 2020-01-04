@@ -101,6 +101,35 @@ STATISTIC(NumAttributesFixedDueToRequiredDependences,
   STATS_DECLTRACK(NAME, Floating,                                              \
                   ("Number of floating values known to be '" #NAME "'"))
 
+// Specialization of the operator<< for abstract attributes subclasses. This
+// disambiguates situations where multiple operators are applicable.
+namespace llvm {
+#define PIPE_OPERATOR(CLASS)                                                   \
+  raw_ostream &operator<<(raw_ostream &OS, const CLASS &AA) {                  \
+    return OS << static_cast<const AbstractAttribute &>(AA);                   \
+  }
+
+PIPE_OPERATOR(AAIsDead)
+PIPE_OPERATOR(AANoUnwind)
+PIPE_OPERATOR(AANoSync)
+PIPE_OPERATOR(AANoRecurse)
+PIPE_OPERATOR(AAWillReturn)
+PIPE_OPERATOR(AANoReturn)
+PIPE_OPERATOR(AAReturnedValues)
+PIPE_OPERATOR(AANonNull)
+PIPE_OPERATOR(AANoAlias)
+PIPE_OPERATOR(AADereferenceable)
+PIPE_OPERATOR(AAAlign)
+PIPE_OPERATOR(AANoCapture)
+PIPE_OPERATOR(AAValueSimplify)
+PIPE_OPERATOR(AANoFree)
+PIPE_OPERATOR(AAHeapToStack)
+PIPE_OPERATOR(AAReachability)
+PIPE_OPERATOR(AAMemoryBehavior)
+
+#undef PIPE_OPERATOR
+} // namespace llvm
+
 // TODO: Determine a good default value.
 //
 // In the LLVM-TS and SPEC2006, 32 seems to not induce compile time overheads
@@ -153,6 +182,20 @@ ChangeStatus llvm::operator&(ChangeStatus l, ChangeStatus r) {
   return l == ChangeStatus::UNCHANGED ? l : r;
 }
 ///}
+
+/// For calls (and invokes) we will only replace instruction uses to not disturb
+/// the old style call graph.
+/// TODO: Remove this once we get rid of the old PM.
+static void replaceAllInstructionUsesWith(Value &Old, Value &New) {
+  if (!isa<CallBase>(Old))
+    return Old.replaceAllUsesWith(&New);
+  SmallVector<Use *, 8> Uses;
+  for (Use &U : Old.uses())
+    if (isa<Instruction>(U.getUser()))
+      Uses.push_back(&U);
+  for (Use *U : Uses)
+    U->set(&New);
+}
 
 /// Recursively visit all values that might become \p IRP at some point. This
 /// will be done by looking through cast instructions, selects, phis, and calls
@@ -289,30 +332,13 @@ static bool addIfNotExistent(LLVMContext &Ctx, const Attribute &Attr,
 
   llvm_unreachable("Expected enum or string attribute!");
 }
-static const Value *getPointerOperand(const Instruction *I) {
-  if (auto *LI = dyn_cast<LoadInst>(I))
-    if (!LI->isVolatile())
-      return LI->getPointerOperand();
 
-  if (auto *SI = dyn_cast<StoreInst>(I))
-    if (!SI->isVolatile())
-      return SI->getPointerOperand();
-
-  if (auto *CXI = dyn_cast<AtomicCmpXchgInst>(I))
-    if (!CXI->isVolatile())
-      return CXI->getPointerOperand();
-
-  if (auto *RMWI = dyn_cast<AtomicRMWInst>(I))
-    if (!RMWI->isVolatile())
-      return RMWI->getPointerOperand();
-
-  return nullptr;
-}
 static const Value *
 getBasePointerOfAccessPointerOperand(const Instruction *I, int64_t &BytesOffset,
                                      const DataLayout &DL,
                                      bool AllowNonInbounds = false) {
-  const Value *Ptr = getPointerOperand(I);
+  const Value *Ptr =
+      Attributor::getPointerOperand(I, /* AllowVolatile */ false);
   if (!Ptr)
     return nullptr;
 
@@ -549,8 +575,7 @@ template <typename AAType, typename StateType = typename AAType::StateType>
 static void clampReturnedValueStates(Attributor &A, const AAType &QueryingAA,
                                      StateType &S) {
   LLVM_DEBUG(dbgs() << "[Attributor] Clamp return value states for "
-                    << static_cast<const AbstractAttribute &>(QueryingAA)
-                    << " into " << S << "\n");
+                    << QueryingAA << " into " << S << "\n");
 
   assert((QueryingAA.getIRPosition().getPositionKind() ==
               IRPosition::IRP_RETURNED ||
@@ -624,8 +649,7 @@ template <typename AAType, typename StateType = typename AAType::StateType>
 static void clampCallSiteArgumentStates(Attributor &A, const AAType &QueryingAA,
                                         StateType &S) {
   LLVM_DEBUG(dbgs() << "[Attributor] Clamp call site argument states for "
-                    << static_cast<const AbstractAttribute &>(QueryingAA)
-                    << " into " << S << "\n");
+                    << QueryingAA << " into " << S << "\n");
 
   assert(QueryingAA.getIRPosition().getPositionKind() ==
              IRPosition::IRP_ARGUMENT &&
@@ -992,7 +1016,7 @@ ChangeStatus AAReturnedValuesImpl::manifest(Attributor &A) {
   auto ReplaceCallSiteUsersWith = [](CallBase &CB, Constant &C) {
     if (CB.getNumUses() == 0 || CB.isMustTailCall())
       return ChangeStatus::UNCHANGED;
-    CB.replaceAllUsesWith(&C);
+    replaceAllInstructionUsesWith(CB, C);
     return ChangeStatus::CHANGED;
   };
 
@@ -1161,8 +1185,7 @@ ChangeStatus AAReturnedValuesImpl::updateImpl(Attributor &A) {
     const auto &RetValAA = A.getAAFor<AAReturnedValues>(
         *this, IRPosition::function(*CB->getCalledFunction()));
     LLVM_DEBUG(dbgs() << "[AAReturnedValues] Found another AAReturnedValues: "
-                      << static_cast<const AbstractAttribute &>(RetValAA)
-                      << "\n");
+                      << RetValAA << "\n");
 
     // Skip dead ends, thus if we do not know anything about the returned
     // call we mark it as unresolved and it will stay that way.
@@ -1694,7 +1717,8 @@ static int64_t getKnownNonNullAndDerefBytesForUse(
 
   int64_t Offset;
   if (const Value *Base = getBasePointerOfAccessPointerOperand(I, Offset, DL)) {
-    if (Base == &AssociatedValue && getPointerOperand(I) == UseV) {
+    if (Base == &AssociatedValue &&
+        Attributor::getPointerOperand(I, /* AllowVolatile */ false) == UseV) {
       int64_t DerefBytes =
           (int64_t)DL.getTypeStoreSize(PtrTy->getPointerElementType()) + Offset;
 
@@ -1707,7 +1731,7 @@ static int64_t getKnownNonNullAndDerefBytesForUse(
   if (const Value *Base = getBasePointerOfAccessPointerOperand(
           I, Offset, DL, /*AllowNonInbounds*/ true)) {
     if (Offset == 0 && Base == &AssociatedValue &&
-        getPointerOperand(I) == UseV) {
+        Attributor::getPointerOperand(I, /* AllowVolatile */ false) == UseV) {
       int64_t DerefBytes =
           (int64_t)DL.getTypeStoreSize(PtrTy->getPointerElementType());
       IsNonNull |= !NullPointerIsDefined;
@@ -1947,6 +1971,208 @@ struct AANoRecurseCallSite final : AANoRecurseImpl {
   void trackStatistics() const override { STATS_DECLTRACK_CS_ATTR(norecurse); }
 };
 
+/// -------------------- Undefined-Behavior Attributes ------------------------
+
+struct AAUndefinedBehaviorImpl : public AAUndefinedBehavior {
+  AAUndefinedBehaviorImpl(const IRPosition &IRP) : AAUndefinedBehavior(IRP) {}
+
+  /// See AbstractAttribute::updateImpl(...).
+  // through a pointer (i.e. also branches etc.)
+  ChangeStatus updateImpl(Attributor &A) override {
+    const size_t UBPrevSize = KnownUBInsts.size();
+    const size_t NoUBPrevSize = AssumedNoUBInsts.size();
+
+    auto InspectMemAccessInstForUB = [&](Instruction &I) {
+      // Skip instructions that are already saved.
+      if (AssumedNoUBInsts.count(&I) || KnownUBInsts.count(&I))
+        return true;
+
+      // If we reach here, we know we have an instruction
+      // that accesses memory through a pointer operand,
+      // for which getPointerOperand() should give it to us.
+      const Value *PtrOp =
+          Attributor::getPointerOperand(&I, /* AllowVolatile */ true);
+      assert(PtrOp &&
+             "Expected pointer operand of memory accessing instruction");
+
+      // A memory access through a pointer is considered UB
+      // only if the pointer has constant null value.
+      // TODO: Expand it to not only check constant values.
+      if (!isa<ConstantPointerNull>(PtrOp)) {
+        AssumedNoUBInsts.insert(&I);
+        return true;
+      }
+      const Type *PtrTy = PtrOp->getType();
+
+      // Because we only consider instructions inside functions,
+      // assume that a parent function exists.
+      const Function *F = I.getFunction();
+
+      // A memory access using constant null pointer is only considered UB
+      // if null pointer is _not_ defined for the target platform.
+      if (llvm::NullPointerIsDefined(F, PtrTy->getPointerAddressSpace()))
+        AssumedNoUBInsts.insert(&I);
+      else
+        KnownUBInsts.insert(&I);
+      return true;
+    };
+
+    auto InspectBrInstForUB = [&](Instruction &I) {
+      // A conditional branch instruction is considered UB if it has `undef`
+      // condition.
+
+      // Skip instructions that are already saved.
+      if (AssumedNoUBInsts.count(&I) || KnownUBInsts.count(&I))
+        return true;
+
+      // We know we have a branch instruction.
+      auto BrInst = cast<BranchInst>(&I);
+
+      // Unconditional branches are never considered UB.
+      if (BrInst->isUnconditional())
+        return true;
+
+      // Either we stopped and the appropriate action was taken,
+      // or we got back a simplified value to continue.
+      Optional<Value *> SimplifiedCond =
+          stopOnUndefOrAssumed(A, BrInst->getCondition(), BrInst);
+      if (!SimplifiedCond.hasValue())
+        return true;
+      AssumedNoUBInsts.insert(&I);
+      return true;
+    };
+
+    A.checkForAllInstructions(InspectMemAccessInstForUB, *this,
+                              {Instruction::Load, Instruction::Store,
+                               Instruction::AtomicCmpXchg,
+                               Instruction::AtomicRMW});
+    A.checkForAllInstructions(InspectBrInstForUB, *this, {Instruction::Br});
+    if (NoUBPrevSize != AssumedNoUBInsts.size() ||
+        UBPrevSize != KnownUBInsts.size())
+      return ChangeStatus::CHANGED;
+    return ChangeStatus::UNCHANGED;
+  }
+
+  bool isKnownToCauseUB(Instruction *I) const override {
+    return KnownUBInsts.count(I);
+  }
+
+  bool isAssumedToCauseUB(Instruction *I) const override {
+    // In simple words, if an instruction is not in the assumed to _not_
+    // cause UB, then it is assumed UB (that includes those
+    // in the KnownUBInsts set). The rest is boilerplate
+    // is to ensure that it is one of the instructions we test
+    // for UB.
+
+    switch (I->getOpcode()) {
+    case Instruction::Load:
+    case Instruction::Store:
+    case Instruction::AtomicCmpXchg:
+    case Instruction::AtomicRMW:
+      return !AssumedNoUBInsts.count(I);
+    case Instruction::Br: {
+      auto BrInst = cast<BranchInst>(I);
+      if (BrInst->isUnconditional())
+        return false;
+      return !AssumedNoUBInsts.count(I);
+    } break;
+    default:
+      return false;
+    }
+    return false;
+  }
+
+  ChangeStatus manifest(Attributor &A) override {
+    if (KnownUBInsts.empty())
+      return ChangeStatus::UNCHANGED;
+    for (Instruction *I : KnownUBInsts)
+      A.changeToUnreachableAfterManifest(I);
+    return ChangeStatus::CHANGED;
+  }
+
+  /// See AbstractAttribute::getAsStr()
+  const std::string getAsStr() const override {
+    return getAssumed() ? "undefined-behavior" : "no-ub";
+  }
+
+  /// Note: The correctness of this analysis depends on the fact that the
+  /// following 2 sets will stop changing after some point.
+  /// "Change" here means that their size changes.
+  /// The size of each set is monotonically increasing
+  /// (we only add items to them) and it is upper bounded by the number of
+  /// instructions in the processed function (we can never save more
+  /// elements in either set than this number). Hence, at some point,
+  /// they will stop increasing.
+  /// Consequently, at some point, both sets will have stopped
+  /// changing, effectively making the analysis reach a fixpoint.
+
+  /// Note: These 2 sets are disjoint and an instruction can be considered
+  /// one of 3 things:
+  /// 1) Known to cause UB (AAUndefinedBehavior could prove it) and put it in
+  ///    the KnownUBInsts set.
+  /// 2) Assumed to cause UB (in every updateImpl, AAUndefinedBehavior
+  ///    has a reason to assume it).
+  /// 3) Assumed to not cause UB. very other instruction - AAUndefinedBehavior
+  ///    could not find a reason to assume or prove that it can cause UB,
+  ///    hence it assumes it doesn't. We have a set for these instructions
+  ///    so that we don't reprocess them in every update.
+  ///    Note however that instructions in this set may cause UB.
+
+protected:
+  /// A set of all live instructions _known_ to cause UB.
+  SmallPtrSet<Instruction *, 8> KnownUBInsts;
+
+private:
+  /// A set of all the (live) instructions that are assumed to _not_ cause UB.
+  SmallPtrSet<Instruction *, 8> AssumedNoUBInsts;
+
+  // Should be called on updates in which if we're processing an instruction
+  // \p I that depends on a value \p V, one of the following has to happen:
+  // - If the value is assumed, then stop.
+  // - If the value is known but undef, then consider it UB.
+  // - Otherwise, do specific processing with the simplified value.
+  // We return None in the first 2 cases to signify that an appropriate
+  // action was taken and the caller should stop.
+  // Otherwise, we return the simplified value that the caller should
+  // use for specific processing.
+  Optional<Value *> stopOnUndefOrAssumed(Attributor &A, const Value *V,
+                                         Instruction *I) {
+    const auto &ValueSimplifyAA =
+        A.getAAFor<AAValueSimplify>(*this, IRPosition::value(*V));
+    Optional<Value *> SimplifiedV =
+        ValueSimplifyAA.getAssumedSimplifiedValue(A);
+    if (!ValueSimplifyAA.isKnown()) {
+      // Don't depend on assumed values.
+      return llvm::None;
+    }
+    if (!SimplifiedV.hasValue()) {
+      // If it is known (which we tested above) but it doesn't have a value,
+      // then we can assume `undef` and hence the instruction is UB.
+      KnownUBInsts.insert(I);
+      return llvm::None;
+    }
+    Value *Val = SimplifiedV.getValue();
+    if (isa<UndefValue>(Val)) {
+      KnownUBInsts.insert(I);
+      return llvm::None;
+    }
+    return Val;
+  }
+};
+
+struct AAUndefinedBehaviorFunction final : AAUndefinedBehaviorImpl {
+  AAUndefinedBehaviorFunction(const IRPosition &IRP)
+      : AAUndefinedBehaviorImpl(IRP) {}
+
+  /// See AbstractAttribute::trackStatistics()
+  void trackStatistics() const override {
+    STATS_DECL(UndefinedBehaviorInstruction, Instruction,
+               "Number of instructions known to have UB");
+    BUILD_STAT_NAME(UndefinedBehaviorInstruction, Instruction) +=
+        KnownUBInsts.size();
+  }
+};
+
 /// ------------------------ Will-Return Attributes ----------------------------
 
 // Helper function that checks whether a function has any cycle.
@@ -2058,9 +2284,7 @@ struct AAReachabilityImpl : AAReachability {
   }
 
   /// See AbstractAttribute::initialize(...).
-  void initialize(Attributor &A) override {
-    indicatePessimisticFixpoint();
-  }
+  void initialize(Attributor &A) override { indicatePessimisticFixpoint(); }
 
   /// See AbstractAttribute::updateImpl(...).
   ChangeStatus updateImpl(Attributor &A) override {
@@ -2148,6 +2372,8 @@ struct AANoAliasCallSiteArgument final : AANoAliasImpl {
     // (i) Check whether noalias holds in the definition.
 
     auto &NoAliasAA = A.getAAFor<AANoAlias>(*this, IRP);
+    LLVM_DEBUG(dbgs() << "[Attributor][AANoAliasCSArg] check definition: " << V
+                      << " :: " << NoAliasAA << "\n");
 
     if (!NoAliasAA.isAssumedNoAlias())
       return indicatePessimisticFixpoint();
@@ -2179,7 +2405,7 @@ struct AANoAliasCallSiteArgument final : AANoAliasImpl {
 
       if (const Function *F = getAnchorScope()) {
         if (AAResults *AAR = A.getInfoCache().getAAResultsForFunction(*F)) {
-          bool IsAliasing = AAR->isNoAlias(&getAssociatedValue(), ArgOp);
+          bool IsAliasing = !AAR->isNoAlias(&getAssociatedValue(), ArgOp);
           LLVM_DEBUG(dbgs()
                      << "[Attributor][NoAliasCSArg] Check alias between "
                         "callsite arguments "
@@ -2187,7 +2413,7 @@ struct AANoAliasCallSiteArgument final : AANoAliasImpl {
                      << getAssociatedValue() << " " << *ArgOp << " => "
                      << (IsAliasing ? "" : "no-") << "alias \n");
 
-          if (IsAliasing)
+          if (!IsAliasing)
             continue;
         }
       }
@@ -2348,9 +2574,7 @@ struct AAIsDeadFloating : public AAIsDeadValueImpl {
       return ChangeStatus::UNCHANGED;
 
     UndefValue &UV = *UndefValue::get(V.getType());
-    bool AnyChange = false;
-    for (Use &U : V.uses())
-      AnyChange |= A.changeUseAfterManifest(U, UV);
+    bool AnyChange = A.changeValueAfterManifest(V, UV);
     return AnyChange ? ChangeStatus::CHANGED : ChangeStatus::UNCHANGED;
   }
 
@@ -2535,14 +2759,16 @@ struct AAIsDeadFunction : public AAIsDead {
               CallInst *CI = createCallMatchingInvoke(II);
               CI->insertBefore(II);
               CI->takeName(II);
-              II->replaceAllUsesWith(CI);
+              replaceAllInstructionUsesWith(*II, *CI);
 
-              // If this is a nounwind + mayreturn invoke we only remove the unwind edge.
-              // This is done by moving the invoke into a new and dead block and connecting
-              // the normal destination of the invoke with a branch that follows the call
-              // replacement we created above.
+              // If this is a nounwind + mayreturn invoke we only remove the
+              // unwind edge. This is done by moving the invoke into a new and
+              // dead block and connecting the normal destination of the invoke
+              // with a branch that follows the call replacement we created
+              // above.
               if (MayReturn) {
-                BasicBlock *NewDeadBB = SplitBlock(BB, II, nullptr, nullptr, nullptr, ".i2c");
+                BasicBlock *NewDeadBB =
+                    SplitBlock(BB, II, nullptr, nullptr, nullptr, ".i2c");
                 assert(isa<BranchInst>(BB->getTerminator()) &&
                        BB->getTerminator()->getNumSuccessors() == 1 &&
                        BB->getTerminator()->getSuccessor(0) == NewDeadBB);
@@ -2592,7 +2818,7 @@ struct AAIsDeadFunction : public AAIsDead {
 
       BB = SplitPos->getParent();
       SplitBlock(BB, SplitPos);
-      changeToUnreachable(BB->getTerminator(), /* UseLLVMTrap */ false);
+      A.changeToUnreachableAfterManifest(BB->getTerminator());
       HasChanged = ChangeStatus::CHANGED;
     }
 
@@ -2957,7 +3183,8 @@ struct AADereferenceableImpl : AADereferenceable {
     int64_t Offset;
     if (const Value *Base = getBasePointerOfAccessPointerOperand(
             I, Offset, DL, /*AllowNonInbounds*/ true)) {
-      if (Base == &getAssociatedValue() && getPointerOperand(I) == UseV) {
+      if (Base == &getAssociatedValue() &&
+          Attributor::getPointerOperand(I, /* AllowVolatile */ false) == UseV) {
         uint64_t Size = DL.getTypeStoreSize(PtrTy->getPointerElementType());
         addAccessedBytes(Offset, Size);
       }
@@ -3920,12 +4147,20 @@ struct AAValueSimplifyImpl : AAValueSimplify {
       if (!V.user_empty() && &V != C && V.getType() == C->getType()) {
         LLVM_DEBUG(dbgs() << "[Attributor][ValueSimplify] " << V << " -> " << *C
                           << "\n");
-        V.replaceAllUsesWith(C);
+        A.changeValueAfterManifest(V, *C);
         Changed = ChangeStatus::CHANGED;
       }
     }
 
     return Changed | AAValueSimplify::manifest(A);
+  }
+
+  /// See AbstractState::indicatePessimisticFixpoint(...).
+  ChangeStatus indicatePessimisticFixpoint() override {
+    // NOTE: Associated value will be returned in a pessimistic fixpoint and is
+    // regarded as known. That's why`indicateOptimisticFixpoint` is called.
+    SimplifiedAssociatedValue = &getAssociatedValue();
+    return indicateOptimisticFixpoint();
   }
 
 protected:
@@ -4027,7 +4262,7 @@ struct AAValueSimplifyFloating : AAValueSimplifyImpl {
     Value &V = getAnchorValue();
 
     // TODO: add other stuffs
-    if (isa<Constant>(V) || isa<UndefValue>(V))
+    if (isa<Constant>(V))
       indicatePessimisticFixpoint();
   }
 
@@ -4160,7 +4395,7 @@ struct AAHeapToStackImpl : public AAHeapToStack {
         AI = new BitCastInst(AI, MallocCall->getType(), "malloc_bc",
                              AI->getNextNode());
 
-      MallocCall->replaceAllUsesWith(AI);
+      replaceAllInstructionUsesWith(*MallocCall, *AI);
 
       if (auto *II = dyn_cast<InvokeInst>(MallocCall)) {
         auto *NBB = II->getNormalDest();
@@ -4293,7 +4528,7 @@ ChangeStatus AAHeapToStackImpl::updateImpl(Attributor &A) {
 
     if (IsMalloc) {
       if (auto *Size = dyn_cast<ConstantInt>(I.getOperand(0)))
-        if (Size->getValue().sle(MaxHeapToStackSize))
+        if (Size->getValue().ule(MaxHeapToStackSize))
           if (UsesCheck(I) || FreeCheck(I)) {
             MallocCalls.insert(&I);
             return true;
@@ -4303,7 +4538,7 @@ ChangeStatus AAHeapToStackImpl::updateImpl(Attributor &A) {
       if (auto *Num = dyn_cast<ConstantInt>(I.getOperand(0)))
         if (auto *Size = dyn_cast<ConstantInt>(I.getOperand(1)))
           if ((Size->getValue().umul_ov(Num->getValue(), Overflow))
-                  .sle(MaxHeapToStackSize))
+                  .ule(MaxHeapToStackSize))
             if (!Overflow && (UsesCheck(I) || FreeCheck(I))) {
               MallocCalls.insert(&I);
               return true;
@@ -4883,8 +5118,7 @@ bool Attributor::checkForAllUses(
     if (Instruction *UserI = dyn_cast<Instruction>(U->getUser()))
       if (LivenessAA && LivenessAA->isAssumedDead(UserI)) {
         LLVM_DEBUG(dbgs() << "[Attributor] Dead user: " << *UserI << ": "
-                          << static_cast<const AbstractAttribute &>(*LivenessAA)
-                          << "\n");
+                          << *LivenessAA << "\n");
         AnyDead = true;
         continue;
       }
@@ -5308,7 +5542,6 @@ ChangeStatus Attributor::run(Module &M) {
 
     SmallVector<Instruction *, 32> DeadInsts;
     SmallVector<Instruction *, 32> TerminatorsToFold;
-    SmallVector<Instruction *, 32> UnreachablesToInsert;
 
     for (auto &It : ToBeChangedUses) {
       Use *U = It.first;
@@ -5325,13 +5558,13 @@ ChangeStatus Attributor::run(Module &M) {
       if (isa<Constant>(NewV) && isa<BranchInst>(U->getUser())) {
         Instruction *UserI = cast<Instruction>(U->getUser());
         if (isa<UndefValue>(NewV)) {
-          UnreachablesToInsert.push_back(UserI);
+          ToBeChangedToUnreachableInsts.insert(UserI);
         } else {
           TerminatorsToFold.push_back(UserI);
         }
       }
     }
-    for (Instruction *I : UnreachablesToInsert)
+    for (Instruction *I : ToBeChangedToUnreachableInsts)
       changeToUnreachable(I, /* UseLLVMTrap */ false);
     for (Instruction *I : TerminatorsToFold)
       ConstantFoldTerminator(I->getParent());
@@ -5440,6 +5673,9 @@ void Attributor::initializeInformationCache(Function &F) {
     case Instruction::Invoke:
     case Instruction::CleanupRet:
     case Instruction::CatchSwitch:
+    case Instruction::AtomicRMW:
+    case Instruction::AtomicCmpXchg:
+    case Instruction::Br:
     case Instruction::Resume:
     case Instruction::Ret:
       IsInterestingOpcode = true;
@@ -5481,6 +5717,9 @@ void Attributor::identifyDefaultAbstractAttributes(Function &F) {
 
   // Every function might be "will-return".
   getOrCreateAAFor<AAWillReturn>(FPos);
+
+  // Every function might contain instructions that cause "undefined behavior".
+  getOrCreateAAFor<AAUndefinedBehavior>(FPos);
 
   // Every function can be nounwind.
   getOrCreateAAFor<AANoUnwind>(FPos);
@@ -5572,7 +5811,8 @@ void Attributor::identifyDefaultAbstractAttributes(Function &F) {
     if (Function *Callee = CS.getCalledFunction()) {
       // Skip declerations except if annotations on their call sites were
       // explicitly requested.
-      if (!AnnotateDeclarationCallSites && Callee->isDeclaration())
+      if (!AnnotateDeclarationCallSites && Callee->isDeclaration() &&
+          !Callee->hasMetadata(LLVMContext::MD_callback))
         return true;
 
       if (!Callee->getReturnType()->isVoidTy() && !CS->use_empty()) {
@@ -5785,6 +6025,7 @@ const char AANoFree::ID = 0;
 const char AANonNull::ID = 0;
 const char AANoRecurse::ID = 0;
 const char AAWillReturn::ID = 0;
+const char AAUndefinedBehavior::ID = 0;
 const char AANoAlias::ID = 0;
 const char AAReachability::ID = 0;
 const char AANoReturn::ID = 0;
@@ -5907,6 +6148,7 @@ CREATE_ALL_ABSTRACT_ATTRIBUTE_FOR_POSITION(AANoFree)
 
 CREATE_FUNCTION_ONLY_ABSTRACT_ATTRIBUTE_FOR_POSITION(AAHeapToStack)
 CREATE_FUNCTION_ONLY_ABSTRACT_ATTRIBUTE_FOR_POSITION(AAReachability)
+CREATE_FUNCTION_ONLY_ABSTRACT_ATTRIBUTE_FOR_POSITION(AAUndefinedBehavior)
 
 CREATE_NON_RET_ABSTRACT_ATTRIBUTE_FOR_POSITION(AAMemoryBehavior)
 

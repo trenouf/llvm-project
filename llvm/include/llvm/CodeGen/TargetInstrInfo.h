@@ -1235,6 +1235,10 @@ public:
 
   /// Get the base operand and byte offset of an instruction that reads/writes
   /// memory.
+  /// It returns false if MI does not read/write memory.
+  /// It returns false if no base operand and offset was found.
+  /// It is not guaranteed to always recognize base operand and offsets in all
+  /// cases.
   virtual bool getMemOperandWithOffset(const MachineInstr &MI,
                                        const MachineOperand *&BaseOp,
                                        int64_t &Offset,
@@ -1643,9 +1647,9 @@ public:
   virtual bool
   areMemAccessesTriviallyDisjoint(const MachineInstr &MIa,
                                   const MachineInstr &MIb) const {
-    assert((MIa.mayLoad() || MIa.mayStore()) &&
+    assert(MIa.mayLoadOrStore() &&
            "MIa must load from or modify a memory location");
-    assert((MIb.mayLoad() || MIb.mayStore()) &&
+    assert(MIb.mayLoadOrStore() &&
            "MIb must load from or modify a memory location");
     return false;
   }
@@ -1735,7 +1739,7 @@ public:
   virtual MachineInstr *createPHISourceCopy(MachineBasicBlock &MBB,
                                             MachineBasicBlock::iterator InsPt,
                                             const DebugLoc &DL, Register Src,
-                                            Register SrcSubReg,
+                                            unsigned SrcSubReg,
                                             Register Dst) const {
     return BuildMI(MBB, InsPt, DL, get(TargetOpcode::COPY), Dst)
         .addReg(Src, 0, SrcSubReg);

@@ -2526,6 +2526,43 @@ def : Pat<(i64 (bitconvert f64:$S)),
 // (move to FPR, nothing else needed)
 def : Pat<(f64 (bitconvert i64:$S)),
           (f64 (MTVSRD $S))>;
+
+// Rounding to integer.
+def : Pat<(i64 (lrint f64:$S)),
+          (i64 (MFVSRD (FCTID $S)))>;
+def : Pat<(i64 (lrint f32:$S)),
+          (i64 (MFVSRD (FCTID (COPY_TO_REGCLASS $S, F8RC))))>;
+def : Pat<(i64 (llrint f64:$S)),
+          (i64 (MFVSRD (FCTID $S)))>;
+def : Pat<(i64 (llrint f32:$S)),
+          (i64 (MFVSRD (FCTID (COPY_TO_REGCLASS $S, F8RC))))>;
+def : Pat<(i64 (lround f64:$S)),
+          (i64 (MFVSRD (FCTID (XSRDPI $S))))>;
+def : Pat<(i64 (lround f32:$S)),
+          (i64 (MFVSRD (FCTID (XSRDPI (COPY_TO_REGCLASS $S, VSFRC)))))>;
+def : Pat<(i64 (llround f64:$S)),
+          (i64 (MFVSRD (FCTID (XSRDPI $S))))>;
+def : Pat<(i64 (llround f32:$S)),
+          (i64 (MFVSRD (FCTID (XSRDPI (COPY_TO_REGCLASS $S, VSFRC)))))>;
+}
+
+let Predicates = [HasVSX] in {
+// Rounding for single precision.
+def : Pat<(f32 (fround f32:$S)),
+          (f32 (COPY_TO_REGCLASS (XSRDPI
+                                   (COPY_TO_REGCLASS $S, VSFRC)), VSSRC))>;
+def : Pat<(f32 (fnearbyint f32:$S)),
+          (f32 (COPY_TO_REGCLASS (XSRDPIC
+                                   (COPY_TO_REGCLASS $S, VSFRC)), VSSRC))>;
+def : Pat<(f32 (ffloor f32:$S)),
+          (f32 (COPY_TO_REGCLASS (XSRDPIM
+                                   (COPY_TO_REGCLASS $S, VSFRC)), VSSRC))>;
+def : Pat<(f32 (fceil f32:$S)),
+          (f32 (COPY_TO_REGCLASS (XSRDPIP
+                                   (COPY_TO_REGCLASS $S, VSFRC)), VSSRC))>;
+def : Pat<(f32 (ftrunc f32:$S)),
+          (f32 (COPY_TO_REGCLASS (XSRDPIZ
+                                   (COPY_TO_REGCLASS $S, VSFRC)), VSSRC))>;
 }
 
 // Materialize a zero-vector of long long
@@ -2948,18 +2985,16 @@ let AddedComplexity = 400, Predicates = [HasP9Vector] in {
 
   // Vector Byte-Reverse H/W/D/Q Word
   def XXBRH : XX2_XT6_XO5_XB6<60,  7, 475, "xxbrh", vsrc, []>;
-  def XXBRW : XX2_XT6_XO5_XB6<60, 15, 475, "xxbrw", vsrc, []>;
-  def XXBRD : XX2_XT6_XO5_XB6<60, 23, 475, "xxbrd", vsrc, []>;
+  def XXBRW : XX2_XT6_XO5_XB6<60, 15, 475, "xxbrw", vsrc,
+    [(set v4i32:$XT, (bswap v4i32:$XB))]>;
+  def XXBRD : XX2_XT6_XO5_XB6<60, 23, 475, "xxbrd", vsrc,
+    [(set v2i64:$XT, (bswap v2i64:$XB))]>;
   def XXBRQ : XX2_XT6_XO5_XB6<60, 31, 475, "xxbrq", vsrc, []>;
 
   // Vector Reverse
-  def : Pat<(v8i16 (PPCxxreverse v8i16 :$A)),
+  def : Pat<(v8i16 (bswap v8i16 :$A)),
             (v8i16 (COPY_TO_REGCLASS (XXBRH (COPY_TO_REGCLASS $A, VSRC)), VRRC))>;
-  def : Pat<(v4i32 (PPCxxreverse v4i32 :$A)),
-            (v4i32 (XXBRW $A))>;
-  def : Pat<(v2i64 (PPCxxreverse v2i64 :$A)),
-            (v2i64 (XXBRD $A))>;
-  def : Pat<(v1i128 (PPCxxreverse v1i128 :$A)),
+  def : Pat<(v1i128 (bswap v1i128 :$A)),
             (v1i128 (COPY_TO_REGCLASS (XXBRQ (COPY_TO_REGCLASS $A, VSRC)), VRRC))>;
 
   // Vector Permute

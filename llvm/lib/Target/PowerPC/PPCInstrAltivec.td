@@ -523,19 +523,19 @@ def VANDC : VXForm_1<1092, (outs vrrc:$vD), (ins vrrc:$vA, vrrc:$vB),
 def VCFSX  : VXForm_1<842, (outs vrrc:$vD), (ins u5imm:$UIMM, vrrc:$vB),
                       "vcfsx $vD, $vB, $UIMM", IIC_VecFP,
                       [(set v4f32:$vD,
-                             (int_ppc_altivec_vcfsx v4i32:$vB, imm:$UIMM))]>;
+                             (int_ppc_altivec_vcfsx v4i32:$vB, timm:$UIMM))]>;
 def VCFUX  : VXForm_1<778, (outs vrrc:$vD), (ins u5imm:$UIMM, vrrc:$vB),
                       "vcfux $vD, $vB, $UIMM", IIC_VecFP,
                       [(set v4f32:$vD,
-                             (int_ppc_altivec_vcfux v4i32:$vB, imm:$UIMM))]>;
+                             (int_ppc_altivec_vcfux v4i32:$vB, timm:$UIMM))]>;
 def VCTSXS : VXForm_1<970, (outs vrrc:$vD), (ins u5imm:$UIMM, vrrc:$vB),
                       "vctsxs $vD, $vB, $UIMM", IIC_VecFP,
                       [(set v4i32:$vD,
-                             (int_ppc_altivec_vctsxs v4f32:$vB, imm:$UIMM))]>;
+                             (int_ppc_altivec_vctsxs v4f32:$vB, timm:$UIMM))]>;
 def VCTUXS : VXForm_1<906, (outs vrrc:$vD), (ins u5imm:$UIMM, vrrc:$vB),
                       "vctuxs $vD, $vB, $UIMM", IIC_VecFP,
                       [(set v4i32:$vD,
-                             (int_ppc_altivec_vctuxs v4f32:$vB, imm:$UIMM))]>;
+                             (int_ppc_altivec_vctuxs v4f32:$vB, timm:$UIMM))]>;
 
 // Defines with the UIM field set to 0 for floating-point
 // to integer (fp_to_sint/fp_to_uint) conversions and integer
@@ -711,7 +711,7 @@ def VSPLTW : VXForm_1<652, (outs vrrc:$vD), (ins u5imm:$UIMM, vrrc:$vB),
                       "vspltw $vD, $vB, $UIMM", IIC_VecPerm,
                       [(set v16i8:$vD,
                         (vspltw_shuffle:$UIMM v16i8:$vB, (undef)))]>;
-let isCodeGenOnly = 1 in {
+let isCodeGenOnly = 1, hasSideEffects = 0 in {
   def VSPLTBs : VXForm_1<524, (outs vrrc:$vD), (ins u5imm:$UIMM, vfrc:$vB),
                          "vspltb $vD, $vB, $UIMM", IIC_VecPerm, []>;
   def VSPLTHs : VXForm_1<588, (outs vrrc:$vD), (ins u5imm:$UIMM, vfrc:$vB),
@@ -860,6 +860,14 @@ def V_SETALLONES  : VXForm_3<908, (outs vrrc:$vD), (ins),
 // Extended mnemonics
 def : InstAlias<"vmr $vD, $vA", (VOR vrrc:$vD, vrrc:$vA, vrrc:$vA)>;
 def : InstAlias<"vnot $vD, $vA", (VNOR vrrc:$vD, vrrc:$vA, vrrc:$vA)>;
+
+// Rotates.
+def : Pat<(v16i8 (rotl v16i8:$vA, v16i8:$vB)),
+          (v16i8 (VRLB v16i8:$vA, v16i8:$vB))>;
+def : Pat<(v8i16 (rotl v8i16:$vA, v8i16:$vB)),
+          (v8i16 (VRLH v8i16:$vA, v8i16:$vB))>;
+def : Pat<(v4i32 (rotl v4i32:$vA, v4i32:$vB)),
+          (v4i32 (VRLW v4i32:$vA, v4i32:$vB))>;
 
 // Loads.
 def : Pat<(v4i32 (load xoaddr:$src)), (LVX xoaddr:$src)>;
@@ -1159,9 +1167,13 @@ def:Pat<(vmrgew_swapped_shuffle v16i8:$vA, v16i8:$vB),
 def:Pat<(vmrgow_swapped_shuffle v16i8:$vA, v16i8:$vB),
         (VMRGOW $vB, $vA)>;
 
+// Vector rotates.
+def VRLD : VX1_Int_Ty<196, "vrld", int_ppc_altivec_vrld, v2i64>;
+
+def : Pat<(v2i64 (rotl v2i64:$vA, v2i64:$vB)),
+          (v2i64 (VRLD v2i64:$vA, v2i64:$vB))>;
 
 // Vector shifts
-def VRLD : VX1_Int_Ty<196, "vrld", int_ppc_altivec_vrld, v2i64>;
 def VSLD : VXForm_1<1476, (outs vrrc:$vD), (ins vrrc:$vA, vrrc:$vB),
                     "vsld $vD, $vA, $vB", IIC_VecGeneral, []>;
 def VSRD : VXForm_1<1732, (outs vrrc:$vD), (ins vrrc:$vA, vrrc:$vB),
@@ -1366,12 +1378,14 @@ def VEXTRACTUW : VX1_VT5_UIM5_VB5<653, "vextractuw", []>;
 def VEXTRACTD  : VX1_VT5_UIM5_VB5<717, "vextractd" , []>;
 
 // Vector Extract Unsigned Byte/Halfword/Word Left/Right-Indexed
+let hasSideEffects = 0 in {
 def VEXTUBLX : VX1_RT5_RA5_VB5<1549, "vextublx", []>;
 def VEXTUBRX : VX1_RT5_RA5_VB5<1805, "vextubrx", []>;
 def VEXTUHLX : VX1_RT5_RA5_VB5<1613, "vextuhlx", []>;
 def VEXTUHRX : VX1_RT5_RA5_VB5<1869, "vextuhrx", []>;
 def VEXTUWLX : VX1_RT5_RA5_VB5<1677, "vextuwlx", []>;
 def VEXTUWRX : VX1_RT5_RA5_VB5<1933, "vextuwrx", []>;
+}
 
 // Vector Insert Element Instructions
 def VINSERTB : VXForm_1<781, (outs vrrc:$vD),

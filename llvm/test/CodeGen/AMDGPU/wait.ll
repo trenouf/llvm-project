@@ -1,5 +1,3 @@
-; Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
-; Notified per clause 4(b) of the license.
 ; RUN: llc -march=amdgcn -verify-machineinstrs < %s | FileCheck -strict-whitespace %s --check-prefix=DEFAULT
 ; RUN: llc -march=amdgcn -mcpu=tonga -mattr=-flat-for-global -verify-machineinstrs < %s | FileCheck -strict-whitespace %s --check-prefix=DEFAULT
 ; RUN: llc -march=amdgcn --misched=ilpmax -verify-machineinstrs < %s | FileCheck -strict-whitespace %s --check-prefix=ILPMAX

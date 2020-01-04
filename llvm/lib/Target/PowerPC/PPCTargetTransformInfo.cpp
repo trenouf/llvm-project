@@ -283,24 +283,6 @@ bool PPCTTIImpl::mightUseCTR(BasicBlock *BB,
           case Intrinsic::loop_decrement:
             return true;
 
-// VisualStudio defines setjmp as _setjmp
-#if defined(_MSC_VER) && defined(setjmp) && \
-                       !defined(setjmp_undefined_for_msvc)
-#  pragma push_macro("setjmp")
-#  undef setjmp
-#  define setjmp_undefined_for_msvc
-#endif
-
-          case Intrinsic::setjmp:
-
-#if defined(_MSC_VER) && defined(setjmp_undefined_for_msvc)
- // let's return it to _setjmp state
-#  pragma pop_macro("setjmp")
-#  undef setjmp_undefined_for_msvc
-#endif
-
-          case Intrinsic::longjmp:
-
           // Exclude eh_sjlj_setjmp; we don't need to exclude eh_sjlj_longjmp
           // because, although it does clobber the counter register, the
           // control can't then return to inside the loop unless there is also
@@ -941,6 +923,20 @@ int PPCTTIImpl::getInterleavedMemoryOpCost(unsigned Opcode, Type *VecTy,
   Cost += Factor*(LT.first-1);
 
   return Cost;
+}
+
+unsigned PPCTTIImpl::getIntrinsicInstrCost(Intrinsic::ID ID, Type *RetTy,
+      ArrayRef<Value*> Args, FastMathFlags FMF, unsigned VF) {
+  return BaseT::getIntrinsicInstrCost(ID, RetTy, Args, FMF, VF);
+}
+
+unsigned PPCTTIImpl::getIntrinsicInstrCost(Intrinsic::ID ID, Type *RetTy,
+      ArrayRef<Type*> Tys, FastMathFlags FMF,
+      unsigned ScalarizationCostPassed) {
+  if (ID == Intrinsic::bswap && ST->hasP9Vector())
+    return TLI->getTypeLegalizationCost(DL, RetTy).first;
+  return BaseT::getIntrinsicInstrCost(ID, RetTy, Tys, FMF,
+                                      ScalarizationCostPassed);
 }
 
 bool PPCTTIImpl::canSaveCmp(Loop *L, BranchInst **BI, ScalarEvolution *SE,
