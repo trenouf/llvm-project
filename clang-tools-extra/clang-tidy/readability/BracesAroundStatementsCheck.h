@@ -52,6 +52,12 @@ private:
   bool checkStmt(const ast_matchers::MatchFinder::MatchResult &Result,
                  const Stmt *S, SourceLocation StartLoc,
                  SourceLocation EndLocHint = SourceLocation());
+  bool checkSimpleStmt(const ast_matchers::MatchFinder::MatchResult &Result,
+                       const Stmt *S, SourceLocation StartLoc,
+                       SourceLocation EndLocHint);
+  void checkCompoundStmt(const ast_matchers::MatchFinder::MatchResult &Result,
+                         const CompoundStmt *S, SourceLocation InitialLoc,
+                         SourceLocation EndLocHint);
   template <typename IfOrWhileStmt>
   SourceLocation findRParenLoc(const IfOrWhileStmt *S, const SourceManager &SM,
                                const ASTContext *Context);
@@ -59,6 +65,8 @@ private:
 private:
   std::set<const Stmt *> ForceBracesStmts;
   const unsigned ShortStatementLines;
+  const bool AddBraces;
+  const bool RemoveUnnecessaryBraces;
 };
 
 } // namespace readability
