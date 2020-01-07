@@ -35,6 +35,7 @@
 #include "RedundantFunctionPtrDereferenceCheck.h"
 #include "RedundantMemberInitCheck.h"
 #include "RedundantNullptrComparisonCheck.h"
+#include "RedundantParenthesesCheck.h"
 #include "RedundantPreprocessorCheck.h"
 #include "RedundantSmartptrGetCheck.h"
 #include "RedundantStringCStrCheck.h"
@@ -98,6 +99,8 @@ public:
         "readability-redundant-member-init");
     CheckFactories.registerCheck<RedundantNullptrComparisonCheck>(
         "readability-redundant-nullptr-comparison");
+    CheckFactories.registerCheck<RedundantParenthesesCheck>(
+        "readability-redundant-parentheses");
     CheckFactories.registerCheck<RedundantPreprocessorCheck>(
         "readability-redundant-preprocessor");
     CheckFactories.registerCheck<SimplifySubscriptExprCheck>(
