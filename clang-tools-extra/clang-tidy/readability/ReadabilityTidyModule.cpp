@@ -14,6 +14,7 @@
 #include "ConstReturnTypeCheck.h"
 #include "ContainerSizeEmptyCheck.h"
 #include "ConvertMemberFunctionsToStatic.h"
+#include "DeclarationInlineCommentCheck.h"
 #include "DeleteNullPointerCheck.h"
 #include "DeletedDefaultCheck.h"
 #include "ElseAfterReturnCheck.h"
@@ -65,6 +66,8 @@ public:
         "readability-container-size-empty");
     CheckFactories.registerCheck<ConvertMemberFunctionsToStatic>(
         "readability-convert-member-functions-to-static");
+    CheckFactories.registerCheck<DeclarationInlineCommentCheck>(
+        "readability-declaration-inline-comment");
     CheckFactories.registerCheck<DeleteNullPointerCheck>(
         "readability-delete-null-pointer");
     CheckFactories.registerCheck<DeletedDefaultCheck>(
