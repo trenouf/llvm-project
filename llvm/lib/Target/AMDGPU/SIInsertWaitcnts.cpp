@@ -44,7 +44,9 @@
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineMemOperand.h"
 #include "llvm/CodeGen/MachineOperand.h"
+#include "llvm/CodeGen/MachinePostDominators.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
+#include "llvm/InitializePasses.h"
 #include "llvm/IR/DebugLoc.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/Debug.h"
@@ -374,6 +376,8 @@ private:
   AMDGPU::IsaVersion IV;
 
   DenseSet<MachineInstr *> TrackedWaitcntSet;
+  DenseMap<const Value *, MachineBasicBlock *> SLoadAddresses;
+  MachinePostDominatorTree *PDT;
 
   struct BlockInfo {
     MachineBasicBlock *MBB;
@@ -408,6 +412,7 @@ public:
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.setPreservesCFG();
+    AU.addRequired<MachinePostDominatorTree>();
     MachineFunctionPass::getAnalysisUsage(AU);
   }
 
@@ -794,6 +799,7 @@ bool WaitcntBrackets::counterOutOfOrder(InstCounterType T) const {
 
 INITIALIZE_PASS_BEGIN(SIInsertWaitcnts, DEBUG_TYPE, "SI Insert Waitcnts", false,
                       false)
+INITIALIZE_PASS_DEPENDENCY(MachinePostDominatorTree)
 INITIALIZE_PASS_END(SIInsertWaitcnts, DEBUG_TYPE, "SI Insert Waitcnts", false,
                     false)
 
@@ -1014,6 +1020,13 @@ bool SIInsertWaitcnts::generateWaitcntInstBefore(
       if (MI.mayStore()) {
         // FIXME: Should not be relying on memoperands.
         for (const MachineMemOperand *Memop : MI.memoperands()) {
+          const Value *Ptr = Memop->getValue();
+          if (SLoadAddresses.count(Ptr)) {
+            addWait(Wait, LGKM_CNT, 0);
+            if (PDT->dominates(MI.getParent(),
+                               SLoadAddresses.find(Ptr)->second))
+              SLoadAddresses.erase(Ptr);
+          }
           unsigned AS = Memop->getAddrSpace();
           if (AS != AMDGPUAS::LOCAL_ADDRESS)
             continue;
@@ -1083,7 +1096,7 @@ bool SIInsertWaitcnts::generateWaitcntInstBefore(
           assert(II->getOpcode() == AMDGPU::S_WAITCNT_VSCNT);
           assert(II->getOperand(0).getReg() == AMDGPU::SGPR_NULL);
           ScoreBrackets.applyWaitcnt(
-              AMDGPU::Waitcnt(0, 0, 0, II->getOperand(1).getImm()));
+              AMDGPU::Waitcnt(~0u, ~0u, ~0u, II->getOperand(1).getImm()));
         }
       }
     }
@@ -1445,6 +1458,13 @@ bool SIInsertWaitcnts::insertWaitcntInBlock(MachineFunction &MF,
       }
     }
 
+    if (TII->isSMRD(Inst)) {
+      for (const MachineMemOperand *Memop : Inst.memoperands()) {
+        const Value *Ptr = Memop->getValue();
+        SLoadAddresses.insert(std::make_pair(Ptr, Inst.getParent()));
+      }
+    }
+
     // Generate an s_waitcnt instruction to be placed before
     // cur_Inst, if needed.
     Modified |= generateWaitcntInstBefore(Inst, ScoreBrackets, OldWaitcntInstr);
@@ -1495,6 +1515,7 @@ bool SIInsertWaitcnts::runOnMachineFunction(MachineFunction &MF) {
   MRI = &MF.getRegInfo();
   IV = AMDGPU::getIsaVersion(ST->getCPU());
   const SIMachineFunctionInfo *MFI = MF.getInfo<SIMachineFunctionInfo>();
+  PDT = &getAnalysis<MachinePostDominatorTree>();
 
   ForceEmitZeroWaitcnts = ForceEmitZeroFlag;
   for (auto T : inst_counter_types())
