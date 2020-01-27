@@ -156,7 +156,7 @@ static MCDisassembler *createHexagonDisassembler(const Target &T,
   return new HexagonDisassembler(STI, Ctx, T.createMCInstrInfo());
 }
 
-extern "C" void LLVMInitializeHexagonDisassembler() {
+extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeHexagonDisassembler() {
   TargetRegistry::RegisterMCDisassembler(getTheHexagonTarget(),
                                          createHexagonDisassembler);
 }
@@ -185,7 +185,10 @@ DecodeStatus HexagonDisassembler::getInstruction(MCInst &MI, uint64_t &Size,
     return Result;
   if (Size > HEXAGON_MAX_PACKET_SIZE)
     return MCDisassembler::Fail;
-  HexagonMCChecker Checker(getContext(), *MCII, STI, MI,
+
+  const auto ArchSTI = Hexagon_MC::getArchSubtarget(&STI);
+  const auto STI_ = (ArchSTI != nullptr) ? *ArchSTI : STI;
+  HexagonMCChecker Checker(getContext(), *MCII, STI_, MI,
                            *getContext().getRegisterInfo(), false);
   if (!Checker.check())
     return MCDisassembler::Fail;

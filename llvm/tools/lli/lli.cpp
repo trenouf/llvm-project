@@ -197,6 +197,11 @@ namespace {
     cl::desc("Generate software floating point library calls"),
     cl::init(false));
 
+  cl::opt<bool> NoProcessSymbols(
+      "no-process-syms",
+      cl::desc("Do not resolve lli process symbols in JIT'd code"),
+      cl::init(false));
+
   enum class DumpKind {
     NoDump,
     DumpFuncsToStdOut,
@@ -781,25 +786,30 @@ int runOrcLazyJIT(const char *ProgName) {
 
   auto Dump = createDebugDumper();
 
-  J->setLazyCompileTransform([&](orc::ThreadSafeModule TSM,
-                                 const orc::MaterializationResponsibility &R) {
-    TSM.withModuleDo([&](Module &M) {
-      if (verifyModule(M, &dbgs())) {
-        dbgs() << "Bad module: " << &M << "\n";
-        exit(1);
-      }
-      Dump(M);
-    });
-    return TSM;
-  });
+  J->getIRTransformLayer().setTransform(
+      [&](orc::ThreadSafeModule TSM,
+          const orc::MaterializationResponsibility &R) {
+        TSM.withModuleDo([&](Module &M) {
+          if (verifyModule(M, &dbgs())) {
+            dbgs() << "Bad module: " << &M << "\n";
+            exit(1);
+          }
+          Dump(M);
+        });
+        return TSM;
+      });
 
   orc::MangleAndInterner Mangle(J->getExecutionSession(), J->getDataLayout());
-  J->getMainJITDylib().addGenerator(
-      ExitOnErr(orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(
-          J->getDataLayout().getGlobalPrefix(),
-          [MainName = Mangle("main")](const orc::SymbolStringPtr &Name) {
-            return Name != MainName;
-          })));
+
+  // Unless they've been explicitly disabled, make process symbols available to
+  // JIT'd code.
+  if (!NoProcessSymbols)
+    J->getMainJITDylib().addGenerator(
+        ExitOnErr(orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(
+            J->getDataLayout().getGlobalPrefix(),
+            [MainName = Mangle("main")](const orc::SymbolStringPtr &Name) {
+              return Name != MainName;
+            })));
 
   orc::LocalCXXRuntimeOverrides CXXRuntimeOverrides;
   ExitOnErr(CXXRuntimeOverrides.enable(J->getMainJITDylib(), Mangle));

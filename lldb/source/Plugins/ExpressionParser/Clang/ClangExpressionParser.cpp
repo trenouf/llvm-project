@@ -253,7 +253,7 @@ static void SetupModuleHeaderPaths(CompilerInstance *compiler,
   }
 
   llvm::SmallString<128> module_cache;
-  auto props = ModuleList::GetGlobalModuleListProperties();
+  const auto &props = ModuleList::GetGlobalModuleListProperties();
   props.GetClangModulesCachePath().GetPath(module_cache);
   search_opts.ModuleCachePath = module_cache.str();
   LLDB_LOG(log, "Using module cache path: {0}", module_cache.c_str());
@@ -1258,8 +1258,9 @@ lldb_private::Status ClangExpressionParser::PrepareForExecution(
           interpret_error, interpret_function_calls);
 
       if (!can_interpret && execution_policy == eExecutionPolicyNever) {
-        err.SetErrorStringWithFormat("Can't run the expression locally: %s",
-                                     interpret_error.AsCString());
+        err.SetErrorStringWithFormat(
+            "Can't evaluate the expression without a running target due to: %s",
+            interpret_error.AsCString());
         return err;
       }
     }

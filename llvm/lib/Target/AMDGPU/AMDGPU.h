@@ -173,6 +173,9 @@ void initializeSIFixScratchSizePass(PassRegistry &);
 extern char &SIFixScratchSizeID;
 extern const char *const SIScratchSizeSymbol;
 
+void initializeSIRemoveShortExecBranchesPass(PassRegistry &);
+extern char &SIRemoveShortExecBranchesID;
+
 void initializeSIInsertSkipsPass(PassRegistry &);
 extern char &SIInsertSkipsPassID;
 

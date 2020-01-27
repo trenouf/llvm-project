@@ -70,6 +70,8 @@ using urem = ValueBuilder<mlir::LLVM::URemOp>;
 using llvm_alloca = ValueBuilder<LLVM::AllocaOp>;
 using llvm_return = OperationBuilder<LLVM::ReturnOp>;
 
+namespace {
+
 template <typename T>
 static LLVMType getPtrToElementType(T containerType,
                                     LLVMTypeConverter &lowering) {
@@ -104,7 +106,6 @@ static Type convertLinalgType(Type t, LLVMTypeConverter &lowering) {
   return Type();
 }
 
-namespace {
 /// EDSC-compatible wrapper for MemRefDescriptor.
 class BaseViewConversionHelper {
 public:
@@ -139,7 +140,6 @@ private:
 
   MemRefDescriptor d;
 };
-} // namespace
 
 // RangeOp creates a new range descriptor.
 class RangeOpConversion : public LLVMOpLowering {
@@ -421,11 +421,15 @@ static FlatSymbolRefAttr getLibraryCallSymbolRef(Operation *op,
   return fnNameAttr;
 }
 
+} // namespace
+
 Type LinalgTypeConverter::convertType(Type t) {
   if (auto result = LLVMTypeConverter::convertType(t))
     return result;
   return convertLinalgType(t, *this);
 }
+
+namespace {
 
 // LinalgOpConversion<LinalgOp> creates a new call to the
 // `LinalgOp::getLibraryCallName()` function.
@@ -552,6 +556,8 @@ populateLinalgToStandardConversionPatterns(OwningRewritePatternList &patterns,
       ctx);
 }
 
+} // namespace
+
 /// Populate the given list with patterns that convert from Linalg to LLVM.
 void mlir::populateLinalgToLLVMConversionPatterns(
     LinalgTypeConverter &converter, OwningRewritePatternList &patterns,
@@ -588,8 +594,7 @@ void ConvertLinalgToLLVMPass::runOnModule() {
     signalPassFailure();
 }
 
-std::unique_ptr<OpPassBase<ModuleOp>>
-mlir::linalg::createConvertLinalgToLLVMPass() {
+std::unique_ptr<OpPassBase<ModuleOp>> mlir::createConvertLinalgToLLVMPass() {
   return std::make_unique<ConvertLinalgToLLVMPass>();
 }
 

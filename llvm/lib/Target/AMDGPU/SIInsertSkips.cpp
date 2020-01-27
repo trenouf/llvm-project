@@ -43,7 +43,7 @@ using namespace llvm;
 #define DEBUG_TYPE "si-insert-skips"
 
 static cl::opt<unsigned> SkipThresholdFlag(
-  "amdgpu-skip-threshold",
+  "amdgpu-skip-threshold-legacy",
   cl::desc("Number of instructions before jumping over divergent control flow"),
   cl::init(12), cl::Hidden);
 
@@ -469,6 +469,9 @@ bool SIInsertSkips::runOnMachineFunction(MachineFunction &MF) {
       MachineInstr &MI = *I;
 
       switch (MI.getOpcode()) {
+      case AMDGPU::S_CBRANCH_EXECZ:
+        ExecBranchStack.push_back(MI.getOperand(0).getMBB());
+        break;
       case AMDGPU::SI_MASK_BRANCH:
         ExecBranchStack.push_back(MI.getOperand(0).getMBB());
         MadeChange |= skipMaskBranch(MI, MBB);

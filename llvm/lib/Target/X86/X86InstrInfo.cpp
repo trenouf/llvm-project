@@ -2826,11 +2826,11 @@ unsigned X86InstrInfo::insertBranch(MachineBasicBlock &MBB,
   return Count;
 }
 
-bool X86InstrInfo::
-canInsertSelect(const MachineBasicBlock &MBB,
-                ArrayRef<MachineOperand> Cond,
-                unsigned TrueReg, unsigned FalseReg,
-                int &CondCycles, int &TrueCycles, int &FalseCycles) const {
+bool X86InstrInfo::canInsertSelect(const MachineBasicBlock &MBB,
+                                   ArrayRef<MachineOperand> Cond,
+                                   unsigned DstReg, unsigned TrueReg,
+                                   unsigned FalseReg, int &CondCycles,
+                                   int &TrueCycles, int &FalseCycles) const {
   // Not all subtargets have cmov instructions.
   if (!Subtarget.hasCMov())
     return false;
@@ -4703,6 +4703,10 @@ static MachineInstr *FuseInst(MachineFunction &MF, unsigned Opcode,
   }
 
   updateOperandRegConstraints(MF, *NewMI, TII);
+
+  // Copy the NoFPExcept flag from the instruction we're fusing.
+  if (MI.getFlag(MachineInstr::MIFlag::NoFPExcept))
+    NewMI->setFlag(MachineInstr::MIFlag::NoFPExcept);
 
   MachineBasicBlock *MBB = InsertPt->getParent();
   MBB->insert(InsertPt, NewMI);

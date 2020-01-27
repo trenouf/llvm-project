@@ -34,6 +34,8 @@
 using namespace mlir;
 using namespace mlir::vector;
 
+namespace {
+
 template <typename T>
 static LLVM::LLVMType getPtrToElementType(T containerType,
                                           LLVMTypeConverter &lowering) {
@@ -157,7 +159,7 @@ private:
   // TODO(ajcbik): consider replacing this one-pattern lowering
   //               with a two-pattern lowering using other vector
   //               ops once all insert/extract/shuffle operations
-  //               are available with lowering implemention.
+  //               are available with lowering implementation.
   //
   Value expandRanks(Value value, Location loc, VectorType srcVectorType,
                     VectorType dstVectorType,
@@ -947,6 +949,8 @@ public:
     return matchSuccess();
   }
 };
+
+} // namespace
 
 /// Populate the given list with patterns that convert from Vector to LLVM.
 void mlir::populateVectorToLLVMConversionPatterns(
