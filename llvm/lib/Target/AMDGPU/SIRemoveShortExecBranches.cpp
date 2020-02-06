@@ -3,6 +3,8 @@
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+// Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
+// Notified per clause 4(b) of the license.
 //
 //===----------------------------------------------------------------------===//
 //
@@ -94,6 +96,9 @@ bool SIRemoveShortExecBranches::mustRetainExeczBranch(
         return true;
 
       if (TII->hasUnwantedEffectsWhenEXECEmpty(*I))
+        return true;
+
+      if (TII->isKillTerminator(I->getOpcode()))
         return true;
 
       // These instructions are potentially expensive even if EXEC = 0.
