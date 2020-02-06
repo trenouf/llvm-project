@@ -3,8 +3,6 @@
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-// Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
-// Notified per clause 4(b) of the license.
 //
 //===----------------------------------------------------------------------===//
 //
@@ -1854,16 +1852,25 @@ void Verifier::verifyFunctionAttrs(FunctionType *FT, AttributeList Attrs,
       CheckFailed("invalid value for 'frame-pointer' attribute: " + FP, V);
   }
 
-  if (Attrs.hasFnAttribute("patchable-function-entry")) {
-    StringRef S0 = Attrs
-                       .getAttribute(AttributeList::FunctionIndex,
-                                     "patchable-function-entry")
-                       .getValueAsString();
-    StringRef S = S0;
+  if (Attrs.hasFnAttribute("patchable-function-prefix")) {
+    StringRef S = Attrs
+                      .getAttribute(AttributeList::FunctionIndex,
+                                    "patchable-function-prefix")
+                      .getValueAsString();
     unsigned N;
     if (S.getAsInteger(10, N))
       CheckFailed(
-          "\"patchable-function-entry\" takes an unsigned integer: " + S0, V);
+          "\"patchable-function-prefix\" takes an unsigned integer: " + S, V);
+  }
+  if (Attrs.hasFnAttribute("patchable-function-entry")) {
+    StringRef S = Attrs
+                      .getAttribute(AttributeList::FunctionIndex,
+                                    "patchable-function-entry")
+                      .getValueAsString();
+    unsigned N;
+    if (S.getAsInteger(10, N))
+      CheckFailed(
+          "\"patchable-function-entry\" takes an unsigned integer: " + S, V);
   }
 }
 
@@ -2924,8 +2931,7 @@ void Verifier::visitCallBase(CallBase &Call) {
              Call.getArgOperand(i), Call);
     }
 
-    // Temporarily disabled this check until LLPC has been fixed.
-    if (0 && Call.paramHasAttr(i, Attribute::ImmArg)) {
+    if (Call.paramHasAttr(i, Attribute::ImmArg)) {
       Value *ArgVal = Call.getArgOperand(i);
       Assert(isa<ConstantInt>(ArgVal) || isa<ConstantFP>(ArgVal),
              "immarg operand has non-immediate parameter", ArgVal, Call);
@@ -4321,7 +4327,7 @@ void Verifier::visitIntrinsicCall(Intrinsic::ID ID, CallBase &Call) {
       "an array");
     break;
   }
-#define INSTRUCTION(NAME, NARGS, ROUND_MODE, INTRINSIC, DAGN)                  \
+#define INSTRUCTION(NAME, NARGS, ROUND_MODE, INTRINSIC)                        \
   case Intrinsic::INTRINSIC:
 #include "llvm/IR/ConstrainedOps.def"
     visitConstrainedFPIntrinsic(cast<ConstrainedFPIntrinsic>(Call));
@@ -4341,6 +4347,7 @@ void Verifier::visitIntrinsicCall(Intrinsic::ID ID, CallBase &Call) {
     visitDbgLabelIntrinsic("label", cast<DbgLabelInst>(Call));
     break;
   case Intrinsic::memcpy:
+  case Intrinsic::memcpy_inline:
   case Intrinsic::memmove:
   case Intrinsic::memset: {
     const auto *MI = cast<MemIntrinsic>(&Call);
@@ -4645,6 +4652,21 @@ void Verifier::visitIntrinsicCall(Intrinsic::ID ID, CallBase &Call) {
     break;
   }
 
+  case Intrinsic::masked_gather: {
+    const APInt &Alignment =
+        cast<ConstantInt>(Call.getArgOperand(1))->getValue();
+    Assert(Alignment.isNullValue() || Alignment.isPowerOf2(),
+           "masked_gather: alignment must be 0 or a power of 2", Call);
+    break;
+  }
+  case Intrinsic::masked_scatter: {
+    const APInt &Alignment =
+        cast<ConstantInt>(Call.getArgOperand(2))->getValue();
+    Assert(Alignment.isNullValue() || Alignment.isPowerOf2(),
+           "masked_scatter: alignment must be 0 or a power of 2", Call);
+    break;
+  }
+
   case Intrinsic::experimental_guard: {
     Assert(isa<CallInst>(Call), "experimental_guard cannot be invoked", Call);
     Assert(Call.countOperandBundlesOfType(LLVMContext::OB_deopt) == 1,
@@ -4757,7 +4779,7 @@ void Verifier::visitConstrainedFPIntrinsic(ConstrainedFPIntrinsic &FPI) {
   unsigned NumOperands;
   bool HasRoundingMD;
   switch (FPI.getIntrinsicID()) {
-#define INSTRUCTION(NAME, NARG, ROUND_MODE, INTRINSIC, DAGN)                   \
+#define INSTRUCTION(NAME, NARG, ROUND_MODE, INTRINSIC)                         \
   case Intrinsic::INTRINSIC:                                                   \
     NumOperands = NARG;                                                        \
     HasRoundingMD = ROUND_MODE;                                                \

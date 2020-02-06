@@ -416,6 +416,7 @@ define amdgpu_kernel void @load_v7i8_to_v7f32(<7 x float> addrspace(1)* noalias 
 ; VI-NEXT:    v_addc_u32_e32 v3, vcc, 0, v1, vcc
 ; VI-NEXT:    v_add_u32_e32 v4, vcc, 3, v0
 ; VI-NEXT:    v_addc_u32_e32 v5, vcc, 0, v1, vcc
+; VI-NEXT:    flat_load_ubyte v8, v[0:1]
 ; VI-NEXT:    flat_load_ubyte v9, v[2:3]
 ; VI-NEXT:    flat_load_ubyte v10, v[4:5]
 ; VI-NEXT:    v_add_u32_e32 v2, vcc, 2, v0
@@ -424,16 +425,15 @@ define amdgpu_kernel void @load_v7i8_to_v7f32(<7 x float> addrspace(1)* noalias 
 ; VI-NEXT:    v_addc_u32_e32 v5, vcc, 0, v1, vcc
 ; VI-NEXT:    v_add_u32_e32 v6, vcc, 4, v0
 ; VI-NEXT:    v_addc_u32_e32 v7, vcc, 0, v1, vcc
-; VI-NEXT:    flat_load_ubyte v8, v[0:1]
 ; VI-NEXT:    v_add_u32_e32 v0, vcc, 6, v0
 ; VI-NEXT:    v_addc_u32_e32 v1, vcc, 0, v1, vcc
 ; VI-NEXT:    flat_load_ubyte v2, v[2:3]
 ; VI-NEXT:    flat_load_ubyte v3, v[4:5]
 ; VI-NEXT:    flat_load_ubyte v4, v[6:7]
 ; VI-NEXT:    flat_load_ubyte v0, v[0:1]
-; VI-NEXT:    s_waitcnt vmcnt(6) lgkmcnt(6)
-; VI-NEXT:    v_lshlrev_b32_e32 v1, 8, v9
 ; VI-NEXT:    s_waitcnt vmcnt(5) lgkmcnt(5)
+; VI-NEXT:    v_lshlrev_b32_e32 v1, 8, v9
+; VI-NEXT:    s_waitcnt vmcnt(4) lgkmcnt(4)
 ; VI-NEXT:    v_lshlrev_b32_e32 v5, 8, v10
 ; VI-NEXT:    s_waitcnt vmcnt(2) lgkmcnt(2)
 ; VI-NEXT:    v_lshlrev_b32_e32 v3, 8, v3
