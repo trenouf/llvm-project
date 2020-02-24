@@ -1,4 +1,4 @@
-/// Attribute base class.
+/// Attribute base class. 
 class Attr<string S> {
   // String representation of this attribute in the IR.
   string AttrString = S;

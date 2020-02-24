@@ -1,4 +1,4 @@
-
+ 
 class R600Reg <string name, bits<16> encoding> : Register<name> {
   let Namespace = "AMDGPU";
   let HWEncoding = encoding;
