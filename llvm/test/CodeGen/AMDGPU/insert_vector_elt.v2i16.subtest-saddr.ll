@@ -1,4 +1,4 @@
-; Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
+; Modifications Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
 ; Notified per clause 4(b) of the license.
 ; RUN: llc -verify-machineinstrs -mtriple=amdgcn-amd-amdhsa -mcpu=gfx900 -enable-amdgpu-aa=0 -mattr=+flat-for-global,-fp64-fp16-denormals -amdgpu-enable-global-sgpr-addr < %s | FileCheck -enable-var-scope -check-prefixes=GCN,GFX9,GFX89 %s
 

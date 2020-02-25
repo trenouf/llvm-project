@@ -1,4 +1,4 @@
-; Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
+; Modifications Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
 ; Notified per clause 4(b) of the license.
 ; RUN: llc -mtriple amdgcn--amdhsa -mcpu=fiji -amdgpu-scalarize-global-loads=true -verify-machineinstrs < %s | FileCheck %s
 

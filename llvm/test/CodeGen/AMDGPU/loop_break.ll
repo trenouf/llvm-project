@@ -1,4 +1,4 @@
-; Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
+; Modifications Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
 ; Notified per clause 4(b) of the license.
 ; RUN: opt -mtriple=amdgcn-- -S -structurizecfg -si-annotate-control-flow %s | FileCheck -check-prefix=OPT %s
 ; RUN: llc -march=amdgcn -verify-machineinstrs -disable-block-placement < %s | FileCheck -check-prefix=GCN %s

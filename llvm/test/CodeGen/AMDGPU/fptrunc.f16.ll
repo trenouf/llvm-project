@@ -1,4 +1,4 @@
-; Modifications Copyright (c) 2019 Advanced Micro Devices, Inc. All rights reserved.
+; Modifications Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
 ; Notified per clause 4(b) of the license.
 ; RUN: llc -amdgpu-scalarize-global-loads=false -march=amdgcn -verify-machineinstrs -enable-unsafe-fp-math < %s | FileCheck -enable-var-scope -check-prefix=GCN -check-prefix=SI -check-prefix=SIVI %s
 ; RUN: llc -amdgpu-scalarize-global-loads=false -march=amdgcn -mcpu=fiji -mattr=-flat-for-global -verify-machineinstrs -enable-unsafe-fp-math < %s | FileCheck -enable-var-scope -check-prefix=GCN -check-prefix=VI -check-prefix=SIVI %s

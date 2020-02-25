@@ -3,6 +3,8 @@
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+// Modifications Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
+// Notified per clause 4(b) of the license.
 //
 //==-----------------------------------------------------------------------===//
 
@@ -546,6 +548,7 @@ void SIFrameLowering::emitEntryFunctionScratchSetup(const GCNSubtarget &ST,
     Register RsrcLo = TRI->getSubReg(ScratchRsrcReg, AMDGPU::sub0);
     Register RsrcHi = TRI->getSubReg(ScratchRsrcReg, AMDGPU::sub1);
     Register Rsrc01 = TRI->getSubReg(ScratchRsrcReg, AMDGPU::sub0_sub1);
+    Register Rsrc03 = TRI->getSubReg(ScratchRsrcReg, AMDGPU::sub3);
 
     const MCInstrDesc &SMovB32 = TII->get(AMDGPU::S_MOV_B32);
 
@@ -595,6 +598,18 @@ void SIFrameLowering::emitEntryFunctionScratchSetup(const GCNSubtarget &ST,
       .addImm(0) // dlc
       .addReg(ScratchRsrcReg, RegState::ImplicitDefine)
       .addMemOperand(MMO);
+
+    // If we are in a wave32 shader we have to modify the const_index_stride to b10
+    // We can't rely on the driver setting this for us since there are often multiple
+    // shaders with different wave sizes
+    // TODO: convert to using SCRATCH instructions or multiple SRD buffers
+    if (ST.isWave32()) {
+      const MCInstrDesc &SAndB32 = TII->get(AMDGPU::S_AND_B32);
+      BuildMI(MBB, I, DL, SAndB32, Rsrc03)
+        .addReg(Rsrc03 )
+        .addImm(0xffdfffff);
+    }
+
     return;
   }
   if (ST.isMesaGfxShader(Fn)
