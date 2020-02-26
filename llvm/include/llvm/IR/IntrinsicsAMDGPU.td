@@ -1,4 +1,4 @@
-//===- IntrinsicsAMDGPU.td - Defines AMDGPU intrinsics -----*- tablegen -*-===//
+//===- IntrinsicsAMDGPU.td - Defines AMDGPU intrinsics -----*- tablegen -*-===// 
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -1956,7 +1956,7 @@ def int_amdgcn_else : Intrinsic<[llvm_i1_ty, llvm_anyint_ty],
 >;
 
 def int_amdgcn_if_break : Intrinsic<[llvm_anyint_ty],
-  [llvm_i1_ty, llvm_anyint_ty], [IntrNoMem, IntrConvergent]
+  [llvm_i1_ty, LLVMMatchType<0>], [IntrNoMem, IntrConvergent]
 >;
 
 def int_amdgcn_loop : Intrinsic<[llvm_i1_ty],

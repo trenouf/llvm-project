@@ -1,8 +1,10 @@
-//===-- GenericOpcodes.td - Opcodes used with GlobalISel ---*- tablegen -*-===//
+//===-- GenericOpcodes.td - Opcodes used with GlobalISel ---*- tablegen -*-===// 
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+// Modifications Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
+// Notified per clause 4(b) of the license.
 //
 //===----------------------------------------------------------------------===//
 //
@@ -960,6 +962,10 @@ def G_INTRINSIC : GenericInstruction {
   let OutOperandList = (outs);
   let InOperandList = (ins unknown:$intrin, variable_ops);
   let hasSideEffects = 0;
+
+  // Conservatively assume this is convergent. If there turnes out to
+  // be a need, there should be separate convergent intrinsic opcode.s
+  let isConvergent = 1;
 }
 
 // Intrinsic with side effects.
@@ -969,6 +975,10 @@ def G_INTRINSIC_W_SIDE_EFFECTS : GenericInstruction {
   let hasSideEffects = 1;
   let mayLoad = 1;
   let mayStore = 1;
+
+  // Conservatively assume this is convergent. If there turnes out to
+  // be a need, there should be separate convergent intrinsic opcode.s
+  let isConvergent = 1;
 }
 
 //------------------------------------------------------------------------------

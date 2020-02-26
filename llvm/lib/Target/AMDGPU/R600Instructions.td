@@ -1,8 +1,10 @@
-//===-- R600Instructions.td - R600 Instruction defs  -------*- tablegen -*-===//
+//===-- R600Instructions.td - R600 Instruction defs  -------*- tablegen -*-===// 
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+// Modifications Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
+// Notified per clause 4(b) of the license.
 //
 //===----------------------------------------------------------------------===//
 //
@@ -1233,6 +1235,11 @@ def : R600Pat<
 def : RcpPat<recip_ieee, f32>;
 }
 
+class SqrtPat<Instruction RsqInst, Instruction RecipInst> : R600Pat <
+  (fsqrt f32:$src),
+  (RecipInst (RsqInst $src))
+>;
+
 //===----------------------------------------------------------------------===//
 // R600 / R700 Instructions
 //===----------------------------------------------------------------------===//
@@ -1272,8 +1279,8 @@ let Predicates = [isR600] in {
   defm DIV_r600 : DIV_Common<RECIP_IEEE_r600>;
   def : POW_Common <LOG_IEEE_r600, EXP_IEEE_r600, MUL>;
 
-  def : R600Pat<(fsqrt f32:$src), (MUL $src, (RECIPSQRT_CLAMPED_r600 $src))>;
   def : RsqPat<RECIPSQRT_IEEE_r600, f32>;
+  def : SqrtPat<RECIPSQRT_IEEE_r600, RECIP_IEEE_r600>;
 
   def R600_ExportSwz : ExportSwzInst {
     let Word1{20-17} = 0; // BURST_COUNT

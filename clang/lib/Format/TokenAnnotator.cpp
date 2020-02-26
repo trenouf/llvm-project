@@ -392,8 +392,8 @@ private:
 
     // Limit this to being an access modifier that follows.
     if (AttrTok->isOneOf(tok::kw_public, tok::kw_private, tok::kw_protected,
-                         tok::kw_class, tok::kw_static, tok::l_square,
-                         Keywords.kw_internal)) {
+                         tok::comment, tok::kw_class, tok::kw_static,
+                         tok::l_square, Keywords.kw_internal)) {
       return true;
     }
 
@@ -819,10 +819,15 @@ private:
         Tok->Type = TT_BitFieldColon;
       } else if (Contexts.size() == 1 &&
                  !Line.First->isOneOf(tok::kw_enum, tok::kw_case)) {
-        if (Tok->getPreviousNonComment()->isOneOf(tok::r_paren,
-                                                  tok::kw_noexcept))
+        FormatToken *Prev = Tok->getPreviousNonComment();
+        if (Prev->isOneOf(tok::r_paren, tok::kw_noexcept))
           Tok->Type = TT_CtorInitializerColon;
-        else
+        else if (Prev->is(tok::kw_try)) {
+          // Member initializer list within function try block.
+          FormatToken *PrevPrev = Prev->getPreviousNonComment();
+          if (PrevPrev && PrevPrev->isOneOf(tok::r_paren, tok::kw_noexcept))
+            Tok->Type = TT_CtorInitializerColon;
+        } else
           Tok->Type = TT_InheritanceColon;
       } else if (canBeObjCSelectorComponent(*Tok->Previous) && Tok->Next &&
                  (Tok->Next->isOneOf(tok::r_paren, tok::comma) ||
@@ -2873,6 +2878,13 @@ bool TokenAnnotator::spaceRequiredBefore(const AnnotatedLine &Line,
       if (Left.is(tok::kw_using))
         return Style.SpaceBeforeParens == FormatStyle::SBPO_ControlStatements ||
                spaceRequiredBeforeParens(Right);
+    // space between ']' and '{'
+    if (Left.is(tok::r_square) && Right.is(tok::l_brace))
+      return true;
+    // space before '{' in "new MyType {"
+    if (Right.is(tok::l_brace) && Left.Previous &&
+        Left.Previous->is(tok::kw_new))
+      return true;
   } else if (Style.Language == FormatStyle::LK_JavaScript) {
     if (Left.is(TT_JsFatArrow))
       return true;
@@ -3115,6 +3127,56 @@ static bool isAllmanBrace(const FormatToken &Tok) {
          !Tok.isOneOf(TT_ObjCBlockLBrace, TT_LambdaLBrace, TT_DictLiteral);
 }
 
+// Returns 'true' if 'Tok' is an function argument.
+static bool IsFunctionArgument(const FormatToken &Tok) {
+  return Tok.MatchingParen && Tok.MatchingParen->Next &&
+         Tok.MatchingParen->Next->isOneOf(tok::comma, tok::r_paren);
+}
+
+static bool
+isItAnEmptyLambdaAllowed(const FormatToken &Tok,
+                         FormatStyle::ShortLambdaStyle ShortLambdaOption) {
+  return Tok.Children.empty() && ShortLambdaOption != FormatStyle::SLS_None;
+}
+
+static bool
+isItAInlineLambdaAllowed(const FormatToken &Tok,
+                         FormatStyle::ShortLambdaStyle ShortLambdaOption) {
+  return (ShortLambdaOption == FormatStyle::SLS_Inline &&
+          IsFunctionArgument(Tok)) ||
+         (ShortLambdaOption == FormatStyle::SLS_All);
+}
+
+static bool isOneChildWithoutMustBreakBefore(const FormatToken &Tok) {
+  if (Tok.Children.size() != 1)
+    return false;
+  FormatToken *curElt = Tok.Children[0]->First;
+    while (curElt) {
+      if (curElt->MustBreakBefore)
+        return false;
+      curElt = curElt->Next;
+    }
+  return true;
+}
+static bool
+isAllmanLambdaBrace(const FormatToken &Tok) {
+  return (Tok.is(tok::l_brace) && Tok.BlockKind == BK_Block &&
+      !Tok.isOneOf(TT_ObjCBlockLBrace, TT_DictLiteral));
+}
+
+static bool
+isAllmanBraceIncludedBreakableLambda(const FormatToken &Tok,
+                            FormatStyle::ShortLambdaStyle ShortLambdaOption) {
+  if (!isAllmanLambdaBrace(Tok))
+    return false;
+
+  if (isItAnEmptyLambdaAllowed(Tok, ShortLambdaOption))
+    return false;
+
+  return !isItAInlineLambdaAllowed(Tok, ShortLambdaOption) ||
+         !isOneChildWithoutMustBreakBefore(Tok);
+}
+
 bool TokenAnnotator::mustBreakBefore(const AnnotatedLine &Line,
                                      const FormatToken &Right) {
   const FormatToken &Left = *Right.Previous;
@@ -3250,6 +3312,14 @@ bool TokenAnnotator::mustBreakBefore(const AnnotatedLine &Line,
   }
   if (Right.is(TT_InlineASMBrace))
     return Right.HasUnescapedNewline;
+
+  auto ShortLambdaOption = Style.AllowShortLambdasOnASingleLine;
+  if (Style.BraceWrapping.BeforeLambdaBody &&
+      (isAllmanBraceIncludedBreakableLambda(Left, ShortLambdaOption) ||
+       isAllmanBraceIncludedBreakableLambda(Right, ShortLambdaOption))) {
+      return true;
+  }
+
   if (isAllmanBrace(Left) || isAllmanBrace(Right))
     return (Line.startsWith(tok::kw_enum) && Style.BraceWrapping.AfterEnum) ||
            (Line.startsWith(tok::kw_typedef, tok::kw_enum) &&
@@ -3261,8 +3331,7 @@ bool TokenAnnotator::mustBreakBefore(const AnnotatedLine &Line,
     return true;
 
   if (Left.is(TT_LambdaLBrace)) {
-    if (Left.MatchingParen && Left.MatchingParen->Next &&
-        Left.MatchingParen->Next->isOneOf(tok::comma, tok::r_paren) &&
+    if (IsFunctionArgument(Left) &&
         Style.AllowShortLambdasOnASingleLine == FormatStyle::SLS_Inline)
       return false;
 
@@ -3272,13 +3341,6 @@ bool TokenAnnotator::mustBreakBefore(const AnnotatedLine &Line,
          Style.AllowShortLambdasOnASingleLine == FormatStyle::SLS_Empty))
       return true;
   }
-
-  // Put multiple C# attributes on a new line.
-  if (Style.isCSharp() &&
-      ((Left.is(TT_AttributeSquare) && Left.is(tok::r_square)) ||
-       (Left.is(tok::r_square) && Right.is(TT_AttributeSquare) &&
-        Right.is(tok::l_square))))
-    return true;
 
   // Put multiple Java annotation on a new line.
   if ((Style.Language == FormatStyle::LK_Java ||
@@ -3667,11 +3729,21 @@ bool TokenAnnotator::canBreakBefore(const AnnotatedLine &Line,
   if ((Left.is(TT_AttributeSquare) && Right.is(tok::l_square)) ||
       (Left.is(tok::r_square) && Right.is(TT_AttributeSquare)))
     return false;
+
+  auto ShortLambdaOption = Style.AllowShortLambdasOnASingleLine;
+  if (Style.BraceWrapping.BeforeLambdaBody) {
+    if (isAllmanLambdaBrace(Left))
+      return !isItAnEmptyLambdaAllowed(Left, ShortLambdaOption);
+    if (isAllmanLambdaBrace(Right))
+      return !isItAnEmptyLambdaAllowed(Right, ShortLambdaOption);
+  }
+
   return Left.isOneOf(tok::comma, tok::coloncolon, tok::semi, tok::l_brace,
                       tok::kw_class, tok::kw_struct, tok::comment) ||
          Right.isMemberAccess() ||
          Right.isOneOf(TT_TrailingReturnArrow, TT_LambdaArrow, tok::lessless,
                        tok::colon, tok::l_square, tok::at) ||
+         (Style.BraceWrapping.BeforeLambdaBody && Right.is(tok::l_brace)) ||
          (Left.is(tok::r_paren) &&
           Right.isOneOf(tok::identifier, tok::kw_const)) ||
          (Left.is(tok::l_paren) && !Right.is(tok::r_paren)) ||

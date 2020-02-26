@@ -1,4 +1,6 @@
-/// Attribute base class.
+// Modifications Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
+// Notified per clause 4(b) of the license.
+/// Attribute base class. 
 class Attr<string S> {
   // String representation of this attribute in the IR.
   string AttrString = S;

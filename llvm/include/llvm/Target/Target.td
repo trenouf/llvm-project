@@ -1,8 +1,10 @@
-//===- Target.td - Target Independent TableGen interface ---*- tablegen -*-===//
+//===- Target.td - Target Independent TableGen interface ---*- tablegen -*-===// 
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+// Modifications Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
+// Notified per clause 4(b) of the license.
 //
 //===----------------------------------------------------------------------===//
 //
@@ -275,6 +277,17 @@ class RegisterClass<string namespace, list<ValueType> regTypes, int alignment,
   // useful as it is sometimes beneficial to assign registers to highly
   // constrained classes first. The value has to be in the range [0,63].
   int AllocationPriority = 0;
+
+  // Generate register pressure set for this register class and any class
+  // synthesized from it. Set to 0 to inhibit unneeded pressure sets.
+  bit GeneratePressureSet = 1;
+
+  // Weight override for register pressure calculation. This is the value
+  // TargetRegisterClass::getRegClassWeight() will return. The weight is in
+  // units of pressure for this register class. If unset tablegen will
+  // calculate a weight based on a number of register units in this register
+  // class registers. The weight is per register.
+  int Weight = ?;
 
   // The diagnostic type to present when referencing this operand in a match
   // failure error message. If this is empty, the default Match_InvalidOperand
@@ -888,6 +901,10 @@ def untyped_imm_0 : TypedOperand<"OPERAND_GENERIC_IMM_0"> {
 /// zero_reg definition - Special node to stand for the zero register.
 ///
 def zero_reg;
+
+/// undef_tied_input - Special node to indicate an input register tied
+/// to an output which defaults to IMPLICIT_DEF.
+def undef_tied_input;
 
 /// All operands which the MC layer classifies as predicates should inherit from
 /// this class in some manner. This is already handled for the most commonly

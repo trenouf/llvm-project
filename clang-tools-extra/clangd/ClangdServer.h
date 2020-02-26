@@ -130,8 +130,11 @@ public:
     llvm::Optional<std::string> ResourceDir = llvm::None;
 
     /// Time to wait after a new file version before computing diagnostics.
-    std::chrono::steady_clock::duration UpdateDebounce =
-        std::chrono::milliseconds(500);
+    DebouncePolicy UpdateDebounce = DebouncePolicy{
+        /*Min=*/std::chrono::milliseconds(50),
+        /*Max=*/std::chrono::milliseconds(500),
+        /*RebuildRatio=*/1,
+    };
 
     bool SuggestMissingIncludes = false;
 
@@ -149,6 +152,8 @@ public:
     std::function<bool(const Tweak &)> TweakFilter = [](const Tweak &T) {
       return !T.hidden(); // only enable non-hidden tweaks.
     };
+
+    explicit operator TUScheduler::Options() const;
   };
   // Sensible default options for use in tests.
   // Features like indexing must be enabled if desired.
@@ -170,7 +175,8 @@ public:
   /// separate thread. When the parsing is complete, DiagConsumer passed in
   /// constructor will receive onDiagnosticsReady callback.
   void addDocument(PathRef File, StringRef Contents,
-                   WantDiagnostics WD = WantDiagnostics::Auto);
+                   WantDiagnostics WD = WantDiagnostics::Auto,
+                   bool ForceRebuild = false);
 
   /// Get the contents of \p File, which should have been added.
   llvm::StringRef getDocument(PathRef File) const;

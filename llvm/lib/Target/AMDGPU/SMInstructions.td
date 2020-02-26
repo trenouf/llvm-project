@@ -1,8 +1,10 @@
-//===---- SMInstructions.td - Scalar Memory Instruction Defintions --------===//
+//===---- SMInstructions.td - Scalar Memory Instruction Defintions --------===// 
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+// Modifications Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
+// Notified per clause 4(b) of the license.
 //
 //===----------------------------------------------------------------------===//
 
@@ -769,21 +771,24 @@ multiclass SMLoad_Pattern <string Instr, ValueType vt> {
   // 1. Offset as an immediate
   def : GCNPat <
     (SIsbuffer_load v4i32:$sbase, (SMRDBufferImm i32:$offset), timm:$cachepolicy),
-    (vt (!cast<SM_Pseudo>(Instr#"_IMM") $sbase, $offset, (extract_glc $cachepolicy),
-                                        (extract_dlc $cachepolicy)))
-  >;
+    (vt (!cast<SM_Pseudo>(Instr#"_IMM") SReg_128:$sbase, i32imm:$offset, (extract_glc $cachepolicy),
+                                        (extract_dlc $cachepolicy)))> {
+    let AddedComplexity = 2;
+  }
 
   // 2. 32-bit IMM offset on CI
   def : GCNPat <
     (vt (SIsbuffer_load v4i32:$sbase, (SMRDBufferImm32 i32:$offset), timm:$cachepolicy)),
-    (!cast<InstSI>(Instr#"_IMM_ci") $sbase, $offset, (extract_glc $cachepolicy), (extract_dlc $cachepolicy))> {
+    (!cast<InstSI>(Instr#"_IMM_ci") SReg_128:$sbase, smrd_literal_offset:$offset,
+                                    (extract_glc $cachepolicy), (extract_dlc $cachepolicy))> {
     let OtherPredicates = [isGFX7Only];
+    let AddedComplexity = 1;
   }
 
   // 3. Offset loaded in an 32bit SGPR
   def : GCNPat <
     (SIsbuffer_load v4i32:$sbase, i32:$offset, timm:$cachepolicy),
-    (vt (!cast<SM_Pseudo>(Instr#"_SGPR") $sbase, $offset, (extract_glc $cachepolicy),
+    (vt (!cast<SM_Pseudo>(Instr#"_SGPR") SReg_128:$sbase, SReg_32:$offset, (extract_glc $cachepolicy),
                                          (extract_dlc $cachepolicy)))
   >;
 }

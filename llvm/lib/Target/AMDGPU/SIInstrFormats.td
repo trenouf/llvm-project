@@ -1,8 +1,10 @@
-//===-- SIInstrFormats.td - SI Instruction Encodings ----------------------===//
+//===-- SIInstrFormats.td - SI Instruction Encodings ----------------------===// 
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+// Modifications Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
+// Notified per clause 4(b) of the license.
 //
 //===----------------------------------------------------------------------===//
 //
@@ -303,7 +305,7 @@ class MIMGe_gfx10 <bits<8> op> : MIMGe {
   bits<3> dim;
   bits<2> nsa;
   bits<1> dlc;
-  bits<1> a16 = 0; // TODO: this should be an operand
+  bits<1> a16;
 
   let Inst{0} = op{7};
   let Inst{2-1} = nsa;

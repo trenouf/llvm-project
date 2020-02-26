@@ -1,8 +1,10 @@
-//===- IntrinsicsARM.td - Defines ARM intrinsics -----------*- tablegen -*-===//
+//===- IntrinsicsARM.td - Defines ARM intrinsics -----------*- tablegen -*-===// 
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+// Modifications Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
+// Notified per clause 4(b) of the license.
 //
 //===----------------------------------------------------------------------===//
 //
@@ -795,6 +797,8 @@ def int_arm_mve_pred_i2v : Intrinsic<
   [llvm_anyvector_ty], [llvm_i32_ty], [IntrNoMem]>;
 def int_arm_mve_pred_v2i : Intrinsic<
   [llvm_i32_ty], [llvm_anyvector_ty], [IntrNoMem]>;
+def int_arm_mve_vreinterpretq : Intrinsic<
+  [llvm_anyvector_ty], [llvm_anyvector_ty], [IntrNoMem]>;
 
 multiclass IntrinsicSignSuffix<list<LLVMType> rets, list<LLVMType> params = [],
                                     list<IntrinsicProperty> props = [],
@@ -1132,4 +1136,48 @@ defm int_arm_mve_vrmlldavha: MVEPredicated<
   [llvm_i32_ty, llvm_i32_ty, llvm_i32_ty,
    llvm_i32_ty, llvm_i32_ty, llvm_anyvector_ty, LLVMMatchType<0>],
   llvm_anyvector_ty>;
+
+defm int_arm_mve_vidup: MVEMXPredicated<
+   [llvm_anyvector_ty /* output */, llvm_i32_ty /* written-back base */], [],
+   [llvm_i32_ty /* base */, llvm_i32_ty /* step */],
+   LLVMMatchType<0>, llvm_anyvector_ty>;
+defm int_arm_mve_vddup: MVEMXPredicated<
+   [llvm_anyvector_ty /* output */, llvm_i32_ty /* written-back base */], [],
+   [llvm_i32_ty /* base */, llvm_i32_ty /* step */],
+   LLVMMatchType<0>, llvm_anyvector_ty>;
+defm int_arm_mve_viwdup: MVEMXPredicated<
+   [llvm_anyvector_ty /* output */, llvm_i32_ty /* written-back base */], [],
+   [llvm_i32_ty /* base */, llvm_i32_ty /* limit */, llvm_i32_ty /* step */],
+   LLVMMatchType<0>, llvm_anyvector_ty>;
+defm int_arm_mve_vdwdup: MVEMXPredicated<
+   [llvm_anyvector_ty /* output */, llvm_i32_ty /* written-back base */], [],
+   [llvm_i32_ty /* base */, llvm_i32_ty /* limit */, llvm_i32_ty /* step */],
+   LLVMMatchType<0>, llvm_anyvector_ty>;
+
+// Flags:
+// * unsigned
+defm int_arm_mve_vcvt_fix: MVEMXPredicated<
+  [llvm_anyvector_ty /* output */], [llvm_i32_ty],
+  [llvm_anyvector_ty /* input vector */, llvm_i32_ty /* scale */],
+  LLVMMatchType<0>, llvm_anyvector_ty>;
+
+def int_arm_mve_vrintn: Intrinsic<
+  [llvm_anyvector_ty], [LLVMMatchType<0>], [IntrNoMem]>;
+def int_arm_mve_vcls: Intrinsic<
+  [llvm_anyvector_ty], [LLVMMatchType<0>], [IntrNoMem]>;
+
+defm int_arm_mve_vbrsr: MVEMXPredicated<
+  [llvm_anyvector_ty], [],
+  [LLVMMatchType<0>, llvm_i32_ty], LLVMMatchType<0>, llvm_anyvector_ty>;
+
+def int_arm_mve_vqdmull: Intrinsic<
+  [llvm_anyvector_ty],
+  [llvm_anyvector_ty, LLVMMatchType<1>, llvm_i32_ty],
+  [IntrNoMem]>;
+def int_arm_mve_vqdmull_predicated: Intrinsic<
+  [llvm_anyvector_ty],
+  [llvm_anyvector_ty, LLVMMatchType<1>, llvm_i32_ty, llvm_anyvector_ty,
+   LLVMMatchType<0>],
+  [IntrNoMem]>;
+
 } // end TargetPrefix
