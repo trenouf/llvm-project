@@ -1,6 +1,4 @@
-// Modifications Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
-// Notified per clause 4(b) of the license.
- 
+
 class R600Reg <string name, bits<16> encoding> : Register<name> {
   let Namespace = "AMDGPU";
   let HWEncoding = encoding;

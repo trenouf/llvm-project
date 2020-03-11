@@ -1,3 +1,5 @@
+; Modifications Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
+; Notified per clause 4(b) of the license.
 ; RUN: llc -march=amdgcn -verify-machineinstrs < %s | FileCheck -check-prefixes=GCN,FUNC %s
 ; RUN: llc -march=amdgcn -mcpu=bonaire -verify-machineinstrs < %s | FileCheck -check-prefixes=GCN,FUNC %s
 ; RUN: llc -march=amdgcn -mcpu=tonga -mattr=-flat-for-global -verify-machineinstrs < %s | FileCheck -check-prefixes=GCN,VIGFX9,FUNC %s
@@ -15,13 +17,13 @@ define amdgpu_cs float @ds_ordered_swap(i32 addrspace(2)* inreg %gds, i32 %value
 }
 
 ; FUNC-LABEL: {{^}}ds_ordered_swap_conditional:
-; GCN: v_cmp_ne_u32_e32 vcc, 0, v[[VALUE:[0-9]+]]
+; GCN: v_cmp_ne_u32_e32 vcc, 0, v0
 ; GCN: s_and_saveexec_b64 s[[SAVED:\[[0-9]+:[0-9]+\]]], vcc
 ; // We have to use s_cbranch, because ds_ordered_count has side effects with EXEC=0
 ; GCN: s_cbranch_execz [[BB:BB._.]]
 ; GCN: s_mov_b32 m0, s0
 ; VIGFX9-NEXT: s_nop 0
-; GCN-NEXT: ds_ordered_count v{{[0-9]+}}, v[[VALUE]] offset:4868 gds
+; GCN-NEXT: ds_ordered_count v{{[0-9]+}}, v0 offset:4868 gds
 ; GCN-NEXT: [[BB]]:
 ; // Wait for expcnt(0) before modifying EXEC
 ; GCN-NEXT: s_waitcnt expcnt(0)

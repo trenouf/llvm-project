@@ -3,6 +3,8 @@
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+// Modifications Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
+// Notified per clause 4(b) of the license.
 //
 //===----------------------------------------------------------------------===//
 //
@@ -82,15 +84,6 @@ bool DeadMachineInstructionElim::isDead(const MachineInstr *MI) const {
         if (LivePhysRegs.test(Reg) || MRI->isReserved(Reg))
           return false;
       } else {
-        if (MO.isDead()) {
-#ifndef NDEBUG
-          // Sanity check on uses of this dead register. All of them should be
-          // 'undef'.
-          for (auto &U : MRI->use_nodbg_operands(Reg))
-            assert(U.isUndef() && "'Undef' use on a 'dead' register is found!");
-#endif
-          continue;
-        }
         for (const MachineInstr &Use : MRI->use_nodbg_instructions(Reg)) {
           if (&Use != MI)
             // This def has a non-debug use. Don't delete the instruction!
