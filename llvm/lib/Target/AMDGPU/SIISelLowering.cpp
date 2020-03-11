@@ -930,7 +930,8 @@ bool SITargetLowering::getTgtMemIntrinsic(IntrinsicInfo &Info,
     }
 
     Info.flags = MachineMemOperand::MODereferenceable;
-    if (Attr.hasFnAttribute(Attribute::ReadOnly)) {
+    if (Attr.hasFnAttribute(Attribute::ReadOnly) ||
+        IntrID == Intrinsic::amdgcn_raw_atomic_buffer_load) {
       Info.opc = ISD::INTRINSIC_W_CHAIN;
       // TODO: Account for dmask reducing loaded size.
       Info.memVT = memVTFromImageReturn(CI.getType());
@@ -6216,6 +6217,7 @@ SDValue SITargetLowering::LowerINTRINSIC_W_CHAIN(SDValue Op,
                                M->getMemOperand(), DAG);
   }
   case Intrinsic::amdgcn_raw_buffer_load:
+  case Intrinsic::amdgcn_raw_atomic_buffer_load:
   case Intrinsic::amdgcn_raw_buffer_load_format: {
     const bool IsFormat = IntrID == Intrinsic::amdgcn_raw_buffer_load_format;
 
@@ -9000,8 +9002,7 @@ SDValue SITargetLowering::performFPMed3ImmCombine(SelectionDAG &DAG,
     return SDValue();
 
   // Ordered >= (although NaN inputs should have folded away by now).
-  APFloat::cmpResult Cmp = K0->getValueAPF().compare(K1->getValueAPF());
-  if (Cmp == APFloat::cmpGreaterThan)
+  if (K0->getValueAPF() > K1->getValueAPF())
     return SDValue();
 
   const MachineFunction &MF = DAG.getMachineFunction();
@@ -9848,8 +9849,13 @@ SDValue SITargetLowering::performCvtF32UByteNCombine(SDNode *N,
 
   const TargetLowering &TLI = DAG.getTargetLoweringInfo();
   APInt DemandedBits = APInt::getBitsSet(32, 8 * Offset, 8 * Offset + 8);
-  if (TLI.SimplifyDemandedBits(Src, DemandedBits, DCI))
+  if (TLI.SimplifyDemandedBits(Src, DemandedBits, DCI)) {
+    // We simplified Src. If this node is not dead, visit it again so it is
+    // folded properly.
+    if (N->getOpcode() != ISD::DELETED_NODE)
+      DCI.AddToWorklist(N);
     return SDValue(N, 0);
+  }
 
   // Handle (or x, (srl y, 8)) pattern when known bits are zero.
   if (SDValue DemandedSrc =
@@ -9868,16 +9874,13 @@ SDValue SITargetLowering::performClampCombine(SDNode *N,
   const MachineFunction &MF = DCI.DAG.getMachineFunction();
   const APFloat &F = CSrc->getValueAPF();
   APFloat Zero = APFloat::getZero(F.getSemantics());
-  APFloat::cmpResult Cmp0 = F.compare(Zero);
-  if (Cmp0 == APFloat::cmpLessThan ||
-      (Cmp0 == APFloat::cmpUnordered &&
-       MF.getInfo<SIMachineFunctionInfo>()->getMode().DX10Clamp)) {
+  if (F < Zero ||
+      (F.isNaN() && MF.getInfo<SIMachineFunctionInfo>()->getMode().DX10Clamp)) {
     return DCI.DAG.getConstantFP(Zero, SDLoc(N), N->getValueType(0));
   }
 
   APFloat One(F.getSemantics(), "1.0");
-  APFloat::cmpResult Cmp1 = F.compare(One);
-  if (Cmp1 == APFloat::cmpGreaterThan)
+  if (F > One)
     return DCI.DAG.getConstantFP(One, SDLoc(N), N->getValueType(0));
 
   return SDValue(CSrc, 0);

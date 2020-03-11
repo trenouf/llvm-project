@@ -143,7 +143,6 @@ defm int_amdgcn_workgroup_id : AMDGPUReadPreloadRegisterIntrinsic_xyz_named
                                <"__builtin_amdgcn_workgroup_id">;
 
 def int_amdgcn_dispatch_ptr :
-  GCCBuiltin<"__builtin_amdgcn_dispatch_ptr">,
   Intrinsic<[LLVMQualPointerType<llvm_i8_ty, 4>], [],
   [IntrNoMem, IntrSpeculatable]>;
 
@@ -951,6 +950,19 @@ class AMDGPURawBufferLoad<LLVMType data_ty = llvm_any_ty> : Intrinsic <
   AMDGPURsrcIntrinsic<0>;
 def int_amdgcn_raw_buffer_load_format : AMDGPURawBufferLoad<llvm_anyfloat_ty>;
 def int_amdgcn_raw_buffer_load : AMDGPURawBufferLoad;
+
+class AMDGPURawAtomicBufferLoad<LLVMType data_ty = llvm_any_ty> : Intrinsic <
+  [data_ty],
+  [llvm_v4i32_ty,     // rsrc(SGPR)
+   llvm_i32_ty,       // offset(VGPR/imm, included in bounds checking and swizzling)
+   llvm_i32_ty,       // soffset(SGPR/imm, excluded from bounds checking and swizzling)
+   llvm_i32_ty],      // auxiliary data (imm, cachepolicy     (bit 0 = glc,
+                      //                                       bit 1 = slc,
+                      //                                       bit 2 = dlc on gfx10+),
+                      //                      swizzled buffer (bit 3 = swz))
+  [IntrArgMemOnly, ImmArg<3>], "", [SDNPMemOperand]>,
+  AMDGPURsrcIntrinsic<0>;
+def int_amdgcn_raw_atomic_buffer_load : AMDGPURawAtomicBufferLoad;
 
 class AMDGPUStructBufferLoad<LLVMType data_ty = llvm_any_ty> : Intrinsic <
   [data_ty],

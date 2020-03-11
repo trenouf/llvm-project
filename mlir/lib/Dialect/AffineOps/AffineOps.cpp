@@ -15,7 +15,6 @@
 #include "mlir/IR/OpImplementation.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Transforms/InliningUtils.h"
-#include "mlir/Transforms/SideEffectsInterface.h"
 #include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/SmallBitVector.h"
 #include "llvm/Support/Debug.h"
@@ -62,19 +61,6 @@ struct AffineInlinerInterface : public DialectInlinerInterface {
   /// Affine regions should be analyzed recursively.
   bool shouldAnalyzeRecursively(Operation *op) const final { return true; }
 };
-
-// TODO(mlir): Extend for other ops in this dialect.
-struct AffineSideEffectsInterface : public SideEffectsDialectInterface {
-  using SideEffectsDialectInterface::SideEffectsDialectInterface;
-
-  SideEffecting isSideEffecting(Operation *op) const override {
-    if (isa<AffineIfOp>(op)) {
-      return Recursive;
-    }
-    return SideEffectsDialectInterface::isSideEffecting(op);
-  };
-};
-
 } // end anonymous namespace
 
 //===----------------------------------------------------------------------===//
@@ -88,7 +74,7 @@ AffineOpsDialect::AffineOpsDialect(MLIRContext *context)
 #define GET_OP_LIST
 #include "mlir/Dialect/AffineOps/AffineOps.cpp.inc"
                 >();
-  addInterfaces<AffineInlinerInterface, AffineSideEffectsInterface>();
+  addInterfaces<AffineInlinerInterface>();
 }
 
 /// Materialize a single constant operation from a given attribute value with
@@ -536,8 +522,12 @@ AffineApplyNormalizer::AffineApplyNormalizer(AffineMap map,
           auxiliaryExprs.push_back(renumberOneDim(t));
         } else {
           // c. The mathematical composition of AffineMap concatenates symbols.
-          //    We do the same for symbol operands.
-          concatenatedSymbols.push_back(t);
+          //    Note that the map composition will put symbols already present
+          //    in the map before any symbols coming from the auxiliary map, so
+          //    we insert them before any symbols that are due to renumbering,
+          //    and after the proper symbols we have seen already.
+          concatenatedSymbols.insert(
+              std::next(concatenatedSymbols.begin(), numProperSymbols++), t);
         }
       }
     }
@@ -1617,9 +1607,8 @@ static LogicalResult verify(AffineIfOp op) {
         "symbol count must match");
 
   // Verify that the operands are valid dimension/symbols.
-  if (failed(verifyDimAndSymbolIdentifiers(
-          op, op.getOperation()->getNonSuccessorOperands(),
-          condition.getNumDims())))
+  if (failed(verifyDimAndSymbolIdentifiers(op, op.getOperands(),
+                                           condition.getNumDims())))
     return failure();
 
   // Verify that the entry of each child region does not have arguments.

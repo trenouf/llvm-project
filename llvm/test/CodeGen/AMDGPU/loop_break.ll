@@ -92,8 +92,8 @@ define amdgpu_kernel void @undef_phi_cond_break_loop(i32 %arg) #0 {
 ; OPT-NEXT:    br label [[BB1:%.*]]
 ; OPT:       bb1:
 ; OPT-NEXT:    [[PHI_BROKEN:%.*]] = phi i64 [ [[TMP0:%.*]], [[FLOW:%.*]] ], [ 0, [[BB:%.*]] ]
-; OPT-NEXT:    [[LSR_IV:%.*]] = phi i32 [ undef, [[BB]] ], [ [[MY_TMP2:%.*]], [[FLOW]] ]
-; OPT-NEXT:    [[LSR_IV_NEXT:%.*]] = add i32 [[LSR_IV]], 1
+; OPT-NEXT:    [[LSR_IV:%.*]] = phi i32 [ undef, [[BB]] ], [ [[LSR_IV_NEXT:%.*]], [[FLOW]] ]
+; OPT-NEXT:    [[LSR_IV_NEXT]] = add i32 [[LSR_IV]], 1
 ; OPT-NEXT:    [[CMP0:%.*]] = icmp slt i32 [[LSR_IV_NEXT]], 0
 ; OPT-NEXT:    br i1 [[CMP0]], label [[BB4:%.*]], label [[FLOW]]
 ; OPT:       bb4:
@@ -101,7 +101,6 @@ define amdgpu_kernel void @undef_phi_cond_break_loop(i32 %arg) #0 {
 ; OPT-NEXT:    [[CMP1:%.*]] = icmp sge i32 [[MY_TMP]], [[LOAD]]
 ; OPT-NEXT:    br label [[FLOW]]
 ; OPT:       Flow:
-; OPT-NEXT:    [[MY_TMP2]] = phi i32 [ [[LSR_IV_NEXT]], [[BB4]] ], [ undef, [[BB1]] ]
 ; OPT-NEXT:    [[MY_TMP3:%.*]] = phi i1 [ [[CMP1]], [[BB4]] ], [ undef, [[BB1]] ]
 ; OPT-NEXT:    [[TMP0]] = call i64 @llvm.amdgcn.if.break.i64(i1 [[MY_TMP3]], i64 [[PHI_BROKEN]])
 ; OPT-NEXT:    [[TMP1:%.*]] = call i1 @llvm.amdgcn.loop.i64(i64 [[TMP0]])
@@ -186,8 +185,8 @@ define amdgpu_kernel void @constexpr_phi_cond_break_loop(i32 %arg) #0 {
 ; OPT-NEXT:    br label [[BB1:%.*]]
 ; OPT:       bb1:
 ; OPT-NEXT:    [[PHI_BROKEN:%.*]] = phi i64 [ [[TMP0:%.*]], [[FLOW:%.*]] ], [ 0, [[BB:%.*]] ]
-; OPT-NEXT:    [[LSR_IV:%.*]] = phi i32 [ undef, [[BB]] ], [ [[MY_TMP2:%.*]], [[FLOW]] ]
-; OPT-NEXT:    [[LSR_IV_NEXT:%.*]] = add i32 [[LSR_IV]], 1
+; OPT-NEXT:    [[LSR_IV:%.*]] = phi i32 [ undef, [[BB]] ], [ [[LSR_IV_NEXT:%.*]], [[FLOW]] ]
+; OPT-NEXT:    [[LSR_IV_NEXT]] = add i32 [[LSR_IV]], 1
 ; OPT-NEXT:    [[CMP0:%.*]] = icmp slt i32 [[LSR_IV_NEXT]], 0
 ; OPT-NEXT:    br i1 [[CMP0]], label [[BB4:%.*]], label [[FLOW]]
 ; OPT:       bb4:
@@ -195,7 +194,6 @@ define amdgpu_kernel void @constexpr_phi_cond_break_loop(i32 %arg) #0 {
 ; OPT-NEXT:    [[CMP1:%.*]] = icmp sge i32 [[MY_TMP]], [[LOAD]]
 ; OPT-NEXT:    br label [[FLOW]]
 ; OPT:       Flow:
-; OPT-NEXT:    [[MY_TMP2]] = phi i32 [ [[LSR_IV_NEXT]], [[BB4]] ], [ undef, [[BB1]] ]
 ; OPT-NEXT:    [[MY_TMP3:%.*]] = phi i1 [ [[CMP1]], [[BB4]] ], [ icmp ne (i32 addrspace(3)* inttoptr (i32 4 to i32 addrspace(3)*), i32 addrspace(3)* @lds), [[BB1]] ]
 ; OPT-NEXT:    [[TMP0]] = call i64 @llvm.amdgcn.if.break.i64(i1 [[MY_TMP3]], i64 [[PHI_BROKEN]])
 ; OPT-NEXT:    [[TMP1:%.*]] = call i1 @llvm.amdgcn.loop.i64(i64 [[TMP0]])
@@ -279,8 +277,8 @@ define amdgpu_kernel void @true_phi_cond_break_loop(i32 %arg) #0 {
 ; OPT-NEXT:    br label [[BB1:%.*]]
 ; OPT:       bb1:
 ; OPT-NEXT:    [[PHI_BROKEN:%.*]] = phi i64 [ [[TMP0:%.*]], [[FLOW:%.*]] ], [ 0, [[BB:%.*]] ]
-; OPT-NEXT:    [[LSR_IV:%.*]] = phi i32 [ undef, [[BB]] ], [ [[MY_TMP2:%.*]], [[FLOW]] ]
-; OPT-NEXT:    [[LSR_IV_NEXT:%.*]] = add i32 [[LSR_IV]], 1
+; OPT-NEXT:    [[LSR_IV:%.*]] = phi i32 [ undef, [[BB]] ], [ [[LSR_IV_NEXT:%.*]], [[FLOW]] ]
+; OPT-NEXT:    [[LSR_IV_NEXT]] = add i32 [[LSR_IV]], 1
 ; OPT-NEXT:    [[CMP0:%.*]] = icmp slt i32 [[LSR_IV_NEXT]], 0
 ; OPT-NEXT:    br i1 [[CMP0]], label [[BB4:%.*]], label [[FLOW]]
 ; OPT:       bb4:
@@ -288,7 +286,6 @@ define amdgpu_kernel void @true_phi_cond_break_loop(i32 %arg) #0 {
 ; OPT-NEXT:    [[CMP1:%.*]] = icmp sge i32 [[MY_TMP]], [[LOAD]]
 ; OPT-NEXT:    br label [[FLOW]]
 ; OPT:       Flow:
-; OPT-NEXT:    [[MY_TMP2]] = phi i32 [ [[LSR_IV_NEXT]], [[BB4]] ], [ undef, [[BB1]] ]
 ; OPT-NEXT:    [[MY_TMP3:%.*]] = phi i1 [ [[CMP1]], [[BB4]] ], [ true, [[BB1]] ]
 ; OPT-NEXT:    [[TMP0]] = call i64 @llvm.amdgcn.if.break.i64(i1 [[MY_TMP3]], i64 [[PHI_BROKEN]])
 ; OPT-NEXT:    [[TMP1:%.*]] = call i1 @llvm.amdgcn.loop.i64(i64 [[TMP0]])
@@ -368,8 +365,8 @@ define amdgpu_kernel void @false_phi_cond_break_loop(i32 %arg) #0 {
 ; OPT-NEXT:    br label [[BB1:%.*]]
 ; OPT:       bb1:
 ; OPT-NEXT:    [[PHI_BROKEN:%.*]] = phi i64 [ [[TMP0:%.*]], [[FLOW:%.*]] ], [ 0, [[BB:%.*]] ]
-; OPT-NEXT:    [[LSR_IV:%.*]] = phi i32 [ undef, [[BB]] ], [ [[MY_TMP2:%.*]], [[FLOW]] ]
-; OPT-NEXT:    [[LSR_IV_NEXT:%.*]] = add i32 [[LSR_IV]], 1
+; OPT-NEXT:    [[LSR_IV:%.*]] = phi i32 [ undef, [[BB]] ], [ [[LSR_IV_NEXT:%.*]], [[FLOW]] ]
+; OPT-NEXT:    [[LSR_IV_NEXT]] = add i32 [[LSR_IV]], 1
 ; OPT-NEXT:    [[CMP0:%.*]] = icmp slt i32 [[LSR_IV_NEXT]], 0
 ; OPT-NEXT:    br i1 [[CMP0]], label [[BB4:%.*]], label [[FLOW]]
 ; OPT:       bb4:
@@ -377,7 +374,6 @@ define amdgpu_kernel void @false_phi_cond_break_loop(i32 %arg) #0 {
 ; OPT-NEXT:    [[CMP1:%.*]] = icmp sge i32 [[MY_TMP]], [[LOAD]]
 ; OPT-NEXT:    br label [[FLOW]]
 ; OPT:       Flow:
-; OPT-NEXT:    [[MY_TMP2]] = phi i32 [ [[LSR_IV_NEXT]], [[BB4]] ], [ undef, [[BB1]] ]
 ; OPT-NEXT:    [[MY_TMP3:%.*]] = phi i1 [ [[CMP1]], [[BB4]] ], [ false, [[BB1]] ]
 ; OPT-NEXT:    [[TMP0]] = call i64 @llvm.amdgcn.if.break.i64(i1 [[MY_TMP3]], i64 [[PHI_BROKEN]])
 ; OPT-NEXT:    [[TMP1:%.*]] = call i1 @llvm.amdgcn.loop.i64(i64 [[TMP0]])
@@ -460,8 +456,8 @@ define amdgpu_kernel void @invert_true_phi_cond_break_loop(i32 %arg) #0 {
 ; OPT-NEXT:    br label [[BB1:%.*]]
 ; OPT:       bb1:
 ; OPT-NEXT:    [[PHI_BROKEN:%.*]] = phi i64 [ [[TMP1:%.*]], [[FLOW:%.*]] ], [ 0, [[BB:%.*]] ]
-; OPT-NEXT:    [[LSR_IV:%.*]] = phi i32 [ undef, [[BB]] ], [ [[MY_TMP2:%.*]], [[FLOW]] ]
-; OPT-NEXT:    [[LSR_IV_NEXT:%.*]] = add i32 [[LSR_IV]], 1
+; OPT-NEXT:    [[LSR_IV:%.*]] = phi i32 [ undef, [[BB]] ], [ [[LSR_IV_NEXT:%.*]], [[FLOW]] ]
+; OPT-NEXT:    [[LSR_IV_NEXT]] = add i32 [[LSR_IV]], 1
 ; OPT-NEXT:    [[CMP0:%.*]] = icmp slt i32 [[LSR_IV_NEXT]], 0
 ; OPT-NEXT:    br i1 [[CMP0]], label [[BB4:%.*]], label [[FLOW]]
 ; OPT:       bb4:
@@ -469,7 +465,6 @@ define amdgpu_kernel void @invert_true_phi_cond_break_loop(i32 %arg) #0 {
 ; OPT-NEXT:    [[CMP1:%.*]] = icmp sge i32 [[MY_TMP]], [[LOAD]]
 ; OPT-NEXT:    br label [[FLOW]]
 ; OPT:       Flow:
-; OPT-NEXT:    [[MY_TMP2]] = phi i32 [ [[LSR_IV_NEXT]], [[BB4]] ], [ undef, [[BB1]] ]
 ; OPT-NEXT:    [[MY_TMP3:%.*]] = phi i1 [ [[CMP1]], [[BB4]] ], [ true, [[BB1]] ]
 ; OPT-NEXT:    [[TMP0:%.*]] = xor i1 [[MY_TMP3]], true
 ; OPT-NEXT:    [[TMP1]] = call i64 @llvm.amdgcn.if.break.i64(i1 [[TMP0]], i64 [[PHI_BROKEN]])
