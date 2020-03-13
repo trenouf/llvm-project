@@ -74,6 +74,9 @@ void SuspiciousIncludePPCallbacks::InclusionDirective(
     bool IsAngled, CharSourceRange FilenameRange, const FileEntry *File,
     StringRef SearchPath, StringRef RelativePath, const Module *Imported,
     SrcMgr::CharacteristicKind FileType) {
+  if (IncludeTok.getIdentifierInfo()->getPPKeywordID() == tok::pp_import)
+    return;
+
   SourceLocation DiagLoc = FilenameRange.getBegin().getLocWithOffset(1);
 
   const Optional<StringRef> IFE =
