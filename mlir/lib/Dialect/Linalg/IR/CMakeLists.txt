@@ -16,6 +16,5 @@ add_dependencies(MLIRLinalgOps
 target_link_libraries(MLIRLinalgOps
   PUBLIC
   MLIRIR
-  MLIRSideEffects
   MLIRStandardOps
   )

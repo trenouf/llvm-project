@@ -262,12 +262,9 @@ Value *llvm::getStrideFromPointer(Value *Ptr, ScalarEvolution *SE, Loop *Lp) {
 Value *llvm::findScalarElement(Value *V, unsigned EltNo) {
   assert(V->getType()->isVectorTy() && "Not looking at a vector?");
   VectorType *VTy = cast<VectorType>(V->getType());
-  // For fixed-length vector, return undef for out of range access.
-  if (!V->getType()->getVectorIsScalable()) {
-    unsigned Width = VTy->getNumElements();
-    if (EltNo >= Width)
-      return UndefValue::get(VTy->getElementType());
-  }
+  unsigned Width = VTy->getNumElements();
+  if (EltNo >= Width)  // Out of range access.
+    return UndefValue::get(VTy->getElementType());
 
   if (Constant *C = dyn_cast<Constant>(V))
     return C->getAggregateElement(EltNo);

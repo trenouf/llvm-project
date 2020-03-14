@@ -422,8 +422,8 @@ protected:
           repro::MultiLoader<repro::CommandProvider>::Create(loader);
       if (!multi_loader) {
         SetError(result,
-                 make_error<StringError>("Unable to create command loader.",
-                                         llvm::inconvertibleErrorCode()));
+                 make_error<StringError>(llvm::inconvertibleErrorCode(),
+                                         "Unable to create command loader."));
         return false;
       }
 
@@ -448,14 +448,6 @@ protected:
       std::unique_ptr<repro::MultiLoader<repro::GDBRemoteProvider>>
           multi_loader =
               repro::MultiLoader<repro::GDBRemoteProvider>::Create(loader);
-
-      if (!multi_loader) {
-        SetError(result,
-                 make_error<StringError>("Unable to create GDB loader.",
-                                         llvm::inconvertibleErrorCode()));
-        return false;
-      }
-
       llvm::Optional<std::string> gdb_file;
       while ((gdb_file = multi_loader->GetNextFile())) {
         auto error_or_file = MemoryBuffer::getFile(*gdb_file);

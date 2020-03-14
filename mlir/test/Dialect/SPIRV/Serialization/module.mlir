@@ -1,12 +1,12 @@
 // RUN: mlir-translate -test-spirv-roundtrip -split-input-file %s | FileCheck %s
 
-// CHECK:      spv.module Logical GLSL450 requires #spv.vce<v1.0, [Shader], []> {
+// CHECK:      spv.module "Logical" "GLSL450" {
 // CHECK-NEXT:   spv.func @foo() "None" {
 // CHECK-NEXT:     spv.Return
 // CHECK-NEXT:   }
-// CHECK-NEXT: }
+// CHECK-NEXT: } attributes {major_version = 1 : i32, minor_version = 0 : i32}
 
-spv.module Logical GLSL450 requires #spv.vce<v1.0, [Shader], []> {
+spv.module "Logical" "GLSL450" {
   spv.func @foo() -> () "None" {
      spv.Return
   }
@@ -14,19 +14,17 @@ spv.module Logical GLSL450 requires #spv.vce<v1.0, [Shader], []> {
 
 // -----
 
-// CHECK: v1.5
-spv.module Logical GLSL450 requires #spv.vce<v1.5, [Shader], []> {
+spv.module "Logical" "GLSL450" {
+} attributes {
+  // CHECK: capabilities = ["Shader", "Float16"]
+  capabilities = ["Shader", "Float16"]
 }
 
 // -----
 
-// CHECK: [Shader, Float16]
-spv.module Logical GLSL450 requires #spv.vce<v1.0, [Shader, Float16], []> {
-}
-
-// -----
-
-// CHECK: [SPV_KHR_float_controls, SPV_KHR_subgroup_vote]
-spv.module Logical GLSL450 requires #spv.vce<v1.0, [Shader], [SPV_KHR_float_controls, SPV_KHR_subgroup_vote]> {
+spv.module "Logical" "GLSL450" {
+} attributes {
+  // CHECK: extensions = ["SPV_KHR_float_controls", "SPV_KHR_subgroup_vote"]
+  extensions = ["SPV_KHR_float_controls", "SPV_KHR_subgroup_vote"]
 }
 

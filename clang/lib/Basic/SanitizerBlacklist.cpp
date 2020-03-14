@@ -12,7 +12,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "clang/Basic/SanitizerBlacklist.h"
-#include "clang/Basic/FileManager.h"
 #include "clang/Basic/SanitizerSpecialCaseList.h"
 #include "clang/Basic/Sanitizers.h"
 #include "clang/Basic/SourceManager.h"

@@ -42,7 +42,6 @@
 #include "llvm/Option/Option.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/FileSystem.h"
-#include "llvm/Support/Host.h"
 #include "llvm/Support/Path.h"
 
 #if !defined(_MSC_VER) && !defined(__MINGW32__)

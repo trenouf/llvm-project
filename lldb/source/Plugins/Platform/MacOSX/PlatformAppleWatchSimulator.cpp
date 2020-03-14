@@ -361,13 +361,14 @@ uint32_t PlatformAppleWatchSimulator::FindProcesses(
 
   // Now we filter them down to only the WatchOS triples
   for (uint32_t i = 0; i < n; ++i) {
-    const ProcessInstanceInfo &proc_info = all_osx_process_infos[i];
+    const ProcessInstanceInfo &proc_info =
+        all_osx_process_infos.GetProcessInfoAtIndex(i);
     if (proc_info.GetArchitecture().GetTriple().getOS() ==
         llvm::Triple::WatchOS) {
-      process_infos.push_back(proc_info);
+      process_infos.Append(proc_info);
     }
   }
-  return process_infos.size();
+  return process_infos.GetSize();
 }
 
 bool PlatformAppleWatchSimulator::GetSupportedArchitectureAtIndex(

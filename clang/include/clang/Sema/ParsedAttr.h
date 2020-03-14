@@ -18,6 +18,7 @@
 #include "clang/Basic/AttributeCommonInfo.h"
 #include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/SourceLocation.h"
+#include "clang/Basic/TargetInfo.h"
 #include "clang/Sema/Ownership.h"
 #include "llvm/ADT/PointerUnion.h"
 #include "llvm/ADT/SmallVector.h"
@@ -39,7 +40,6 @@ class IdentifierInfo;
 class LangOptions;
 class ParsedAttr;
 class Sema;
-class TargetInfo;
 
 struct ParsedAttrInfo {
   /// Corresponds to the Kind enum.

@@ -1232,7 +1232,7 @@ public:
       }
     }
 
-    if (!A.isFunctionIPOAmendable(*F))
+    if (!F->hasExactDefinition())
       indicatePessimisticFixpoint();
   }
 
@@ -2512,7 +2512,7 @@ static bool containsCycle(Function &F) {
 // FIXME: Any cycle is regarded as endless loop for now.
 //        We have to allow some patterns.
 static bool containsPossiblyEndlessLoop(Function *F) {
-  return containsCycle(*F);
+  return !F || !F->hasExactDefinition() || containsCycle(*F);
 }
 
 struct AAWillReturnImpl : public AAWillReturn {
@@ -2523,7 +2523,7 @@ struct AAWillReturnImpl : public AAWillReturn {
     AAWillReturn::initialize(A);
 
     Function *F = getAssociatedFunction();
-    if (!F || !A.isFunctionIPOAmendable(*F) || containsPossiblyEndlessLoop(F))
+    if (containsPossiblyEndlessLoop(F))
       indicatePessimisticFixpoint();
   }
 
@@ -2812,8 +2812,6 @@ struct AANoAliasCallSiteArgument final : AANoAliasImpl {
       return false;
     }
 
-    A.recordDependence(NoAliasAA, *this, DepClassTy::OPTIONAL);
-
     const IRPosition &VIRP = IRPosition::value(getAssociatedValue());
     auto &NoCaptureAA =
         A.getAAFor<AANoCapture>(*this, VIRP, /* TrackDependence */ false);
@@ -3065,7 +3063,7 @@ struct AAIsDeadArgument : public AAIsDeadFloating {
 
   /// See AbstractAttribute::initialize(...).
   void initialize(Attributor &A) override {
-    if (!A.isFunctionIPOAmendable(*getAssociatedFunction()))
+    if (!getAssociatedFunction()->hasExactDefinition())
       indicatePessimisticFixpoint();
   }
 
@@ -3616,8 +3614,8 @@ struct AADereferenceableImpl : AADereferenceable {
 
     const IRPosition &IRP = this->getIRPosition();
     bool IsFnInterface = IRP.isFnInterfaceKind();
-    Function *FnScope = IRP.getAnchorScope();
-    if (IsFnInterface && (!FnScope || !A.isFunctionIPOAmendable(*FnScope)))
+    const Function *FnScope = IRP.getAnchorScope();
+    if (IsFnInterface && (!FnScope || !FnScope->hasExactDefinition()))
       indicatePessimisticFixpoint();
   }
 
@@ -3899,7 +3897,7 @@ struct AAAlignImpl : AAAlign {
 
     if (getIRPosition().isFnInterfaceKind() &&
         (!getAssociatedFunction() ||
-         !A.isFunctionIPOAmendable(*getAssociatedFunction())))
+         !getAssociatedFunction()->hasExactDefinition()))
       indicatePessimisticFixpoint();
   }
 
@@ -4156,7 +4154,7 @@ struct AANoCaptureImpl : public AANoCapture {
     }
     Function *AnchorScope = getAnchorScope();
     if (isFnInterfaceKind() &&
-        (!AnchorScope || !A.isFunctionIPOAmendable(*AnchorScope))) {
+        (!AnchorScope || !AnchorScope->hasExactDefinition())) {
       indicatePessimisticFixpoint();
       return;
     }
@@ -5888,7 +5886,7 @@ struct AAMemoryBehaviorArgument : AAMemoryBehaviorFloating {
 
     // Initialize the use vector with all direct uses of the associated value.
     Argument *Arg = getAssociatedArgument();
-    if (!Arg || !A.isFunctionIPOAmendable(*(Arg->getParent()))) {
+    if (!Arg || !Arg->getParent()->hasExactDefinition()) {
       indicatePessimisticFixpoint();
     } else {
       // Initialize the use vector with all direct uses of the associated value.
@@ -6016,7 +6014,7 @@ struct AAMemoryBehaviorCallSite final : AAMemoryBehaviorImpl {
   void initialize(Attributor &A) override {
     AAMemoryBehaviorImpl::initialize(A);
     Function *F = getAssociatedFunction();
-    if (!F || !A.isFunctionIPOAmendable(*F))
+    if (!F || !F->hasExactDefinition())
       indicatePessimisticFixpoint();
   }
 
@@ -6703,7 +6701,7 @@ struct AAMemoryLocationCallSite final : AAMemoryLocationImpl {
   void initialize(Attributor &A) override {
     AAMemoryLocationImpl::initialize(A);
     Function *F = getAssociatedFunction();
-    if (!F || !A.isFunctionIPOAmendable(*F))
+    if (!F || !F->hasExactDefinition())
       indicatePessimisticFixpoint();
   }
 
@@ -8293,10 +8291,6 @@ void Attributor::initializeInformationCache(Function &F) {
     if (I.mayReadOrWriteMemory())
       ReadOrWriteInsts.push_back(&I);
   }
-
-  if (F.hasFnAttribute(Attribute::AlwaysInline) &&
-      isInlineViable(F).isSuccess())
-    InfoCache.InlineableFunctions.insert(&F);
 }
 
 void Attributor::recordDependence(const AbstractAttribute &FromAA,

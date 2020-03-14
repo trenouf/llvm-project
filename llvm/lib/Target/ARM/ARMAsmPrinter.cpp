@@ -576,22 +576,12 @@ void ARMAsmPrinter::emitEndOfAsmFile(Module &M) {
 // to appear in the .ARM.attributes section in ELF.
 // Instead of subclassing the MCELFStreamer, we do the work here.
 
- // Returns true if all functions have the same function attribute value.
- // It also returns true when the module has no functions.
+// Returns true if all functions have the same function attribute value.
+// It also returns true when the module has no functions.
 static bool checkFunctionsAttributeConsistency(const Module &M, StringRef Attr,
                                                StringRef Value) {
-   return !any_of(M, [&](const Function &F) {
-       return F.getFnAttribute(Attr).getValueAsString() != Value;
-   });
-}
-// Returns true if all functions have the same denormal mode.
-// It also returns true when the module has no functions.
-static bool checkDenormalAttributeConsistency(const Module &M,
-                                              StringRef Attr,
-                                              DenormalMode Value) {
   return !any_of(M, [&](const Function &F) {
-    StringRef AttrVal = F.getFnAttribute(Attr).getValueAsString();
-    return parseDenormalFPAttribute(AttrVal) != Value;
+    return F.getFnAttribute(Attr).getValueAsString() != Value;
   });
 }
 
@@ -652,15 +642,15 @@ void ARMAsmPrinter::emitAttributes() {
   }
 
   // Set FP Denormals.
-  if (checkDenormalAttributeConsistency(*MMI->getModule(),
-                                        "denormal-fp-math",
-                                        DenormalMode::getPreserveSign()) ||
+  if (checkFunctionsAttributeConsistency(*MMI->getModule(),
+                                         "denormal-fp-math",
+                                         "preserve-sign") ||
       TM.Options.FPDenormalMode == FPDenormal::PreserveSign)
     ATS.emitAttribute(ARMBuildAttrs::ABI_FP_denormal,
                       ARMBuildAttrs::PreserveFPSign);
-  else if (checkDenormalAttributeConsistency(*MMI->getModule(),
-                                             "denormal-fp-math",
-                                             DenormalMode::getPositiveZero()) ||
+  else if (checkFunctionsAttributeConsistency(*MMI->getModule(),
+                                              "denormal-fp-math",
+                                              "positive-zero") ||
            TM.Options.FPDenormalMode == FPDenormal::PositiveZero)
     ATS.emitAttribute(ARMBuildAttrs::ABI_FP_denormal,
                       ARMBuildAttrs::PositiveZero);

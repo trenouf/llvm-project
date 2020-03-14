@@ -8,7 +8,6 @@
 #include "Format.h"
 #include "Logger.h"
 #include "clang/Basic/SourceManager.h"
-#include "clang/Basic/FileManager.h"
 #include "clang/Format/Format.h"
 #include "clang/Lex/Lexer.h"
 #include "clang/Tooling/Core/Replacement.h"

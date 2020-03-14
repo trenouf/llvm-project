@@ -13,8 +13,7 @@
 #ifndef TOY_OPS
 #define TOY_OPS
 
-include "mlir/Interfaces/CallInterfaces.td"
-include "mlir/Interfaces/SideEffects.td"
+include "mlir/Analysis/CallInterfaces.td"
 include "toy/ShapeInferenceInterface.td"
 
 // Provide a definition of the 'toy' dialect in the ODS framework so that we
@@ -220,8 +219,7 @@ def ReshapeOp : Toy_Op<"reshape", [NoSideEffect]> {
   let results = (outs StaticShapeTensorOf<[F64]>);
 }
 
-def ReturnOp : Toy_Op<"return", [NoSideEffect, HasParent<"FuncOp">,
-                                 Terminator]> {
+def ReturnOp : Toy_Op<"return", [Terminator, HasParent<"FuncOp">]> {
   let summary = "return operation";
   let description = [{
     The "return" operation represents a return operation within a function.

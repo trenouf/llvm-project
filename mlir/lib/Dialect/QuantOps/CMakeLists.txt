@@ -19,7 +19,6 @@ target_link_libraries(MLIRQuantOps
   PUBLIC
   MLIRIR
   MLIRPass
-  MLIRSideEffects
   MLIRSupport
   MLIRStandardOps
   MLIRTransformUtils

@@ -250,20 +250,7 @@ bool Test::testMatch(RunContext &Ctx, bool MatchResult, MatcherBase &Matcher,
 bool Test::testProcessKilled(RunContext &Ctx, testutils::FunctionCaller *Func,
                              int Signal, const char *LHSStr, const char *RHSStr,
                              const char *File, unsigned long Line) {
-  testutils::ProcessStatus Result = testutils::invokeInSubprocess(Func, 500);
-
-  if (const char *error = Result.getError()) {
-    Ctx.markFail();
-    llvm::outs() << File << ":" << Line << ": FAILURE\n" << error << '\n';
-    return false;
-  }
-
-  if (Result.timedOut()) {
-    Ctx.markFail();
-    llvm::outs() << File << ":" << Line << ": FAILURE\n"
-                 << "Process timed out after " << 500 << " miliseconds.\n";
-    return false;
-  }
+  testutils::ProcessStatus Result = testutils::invokeInSubprocess(Func);
 
   if (Result.exitedNormally()) {
     Ctx.markFail();
@@ -294,20 +281,7 @@ bool Test::testProcessExits(RunContext &Ctx, testutils::FunctionCaller *Func,
                             int ExitCode, const char *LHSStr,
                             const char *RHSStr, const char *File,
                             unsigned long Line) {
-  testutils::ProcessStatus Result = testutils::invokeInSubprocess(Func, 500);
-
-  if (const char *error = Result.getError()) {
-    Ctx.markFail();
-    llvm::outs() << File << ":" << Line << ": FAILURE\n" << error << '\n';
-    return false;
-  }
-
-  if (Result.timedOut()) {
-    Ctx.markFail();
-    llvm::outs() << File << ":" << Line << ": FAILURE\n"
-                 << "Process timed out after " << 500 << " miliseconds.\n";
-    return false;
-  }
+  testutils::ProcessStatus Result = testutils::invokeInSubprocess(Func);
 
   if (!Result.exitedNormally()) {
     Ctx.markFail();

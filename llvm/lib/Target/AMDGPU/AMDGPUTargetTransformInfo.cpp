@@ -480,14 +480,14 @@ int GCNTTIImpl::getArithmeticInstrCost(unsigned Opcode, Type *Ty,
 
 template <typename T>
 int GCNTTIImpl::getIntrinsicInstrCost(Intrinsic::ID ID, Type *RetTy,
-                                      ArrayRef<T *> Args, FastMathFlags FMF,
-                                      unsigned VF, const Instruction *I) {
+                                      ArrayRef<T *> Args,
+                                      FastMathFlags FMF, unsigned VF) {
   if (ID != Intrinsic::fma)
-    return BaseT::getIntrinsicInstrCost(ID, RetTy, Args, FMF, VF, I);
+    return BaseT::getIntrinsicInstrCost(ID, RetTy, Args, FMF, VF);
 
   EVT OrigTy = TLI->getValueType(DL, RetTy);
   if (!OrigTy.isSimple()) {
-    return BaseT::getIntrinsicInstrCost(ID, RetTy, Args, FMF, VF, I);
+    return BaseT::getIntrinsicInstrCost(ID, RetTy, Args, FMF, VF);
   }
 
   // Legalize the type.
@@ -509,17 +509,16 @@ int GCNTTIImpl::getIntrinsicInstrCost(Intrinsic::ID ID, Type *RetTy,
 }
 
 int GCNTTIImpl::getIntrinsicInstrCost(Intrinsic::ID ID, Type *RetTy,
-                                      ArrayRef<Value *> Args, FastMathFlags FMF,
-                                      unsigned VF, const Instruction *I) {
-  return getIntrinsicInstrCost<Value>(ID, RetTy, Args, FMF, VF, I);
+                                      ArrayRef<Value*> Args, FastMathFlags FMF,
+                                      unsigned VF) {
+  return getIntrinsicInstrCost<Value>(ID, RetTy, Args, FMF, VF);
 }
 
 int GCNTTIImpl::getIntrinsicInstrCost(Intrinsic::ID ID, Type *RetTy,
                                       ArrayRef<Type *> Tys, FastMathFlags FMF,
-                                      unsigned ScalarizationCostPassed,
-                                      const Instruction *I) {
+                                      unsigned ScalarizationCostPassed) {
   return getIntrinsicInstrCost<Type>(ID, RetTy, Tys, FMF,
-                                     ScalarizationCostPassed, I);
+                                     ScalarizationCostPassed);
 }
 
 unsigned GCNTTIImpl::getCFInstrCost(unsigned Opcode) {
@@ -896,7 +895,7 @@ unsigned GCNTTIImpl::getUserCost(const User *U,
       if (auto *FPMO = dyn_cast<FPMathOperator>(II))
         FMF = FPMO->getFastMathFlags();
       return getIntrinsicInstrCost(II->getIntrinsicID(), II->getType(), Args,
-                                   FMF, 1, II);
+                                   FMF);
     } else {
       return BaseT::getUserCost(U, Operands);
     }

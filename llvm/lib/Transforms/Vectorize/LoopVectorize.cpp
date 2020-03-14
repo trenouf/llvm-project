@@ -1717,10 +1717,9 @@ void InnerLoopVectorizer::createVectorIntOrFpInductionPHI(
   // FIXME: If the step is non-constant, we create the vector splat with
   //        IRBuilder. IRBuilder can constant-fold the multiply, but it doesn't
   //        handle a constant vector splat.
-  Value *SplatVF =
-      isa<Constant>(Mul)
-          ? ConstantVector::getSplat({VF, false}, cast<Constant>(Mul))
-          : Builder.CreateVectorSplat(VF, Mul);
+  Value *SplatVF = isa<Constant>(Mul)
+                       ? ConstantVector::getSplat(VF, cast<Constant>(Mul))
+                       : Builder.CreateVectorSplat(VF, Mul);
   Builder.restoreIP(CurrIP);
 
   // We may need to add the step a number of times, depending on the unroll
@@ -3302,7 +3301,7 @@ unsigned LoopVectorizationCostModel::getVectorIntrinsicCost(CallInst *CI,
     FMF = FPMO->getFastMathFlags();
 
   SmallVector<Value *, 4> Operands(CI->arg_operands());
-  return TTI.getIntrinsicInstrCost(ID, CI->getType(), Operands, FMF, VF, CI);
+  return TTI.getIntrinsicInstrCost(ID, CI->getType(), Operands, FMF, VF);
 }
 
 static Type *smallestIntegerVectorType(Type *T1, Type *T2) {
@@ -3732,7 +3731,7 @@ void InnerLoopVectorizer::fixReduction(PHINode *Phi) {
       // incoming scalar reduction.
       VectorStart = ReductionStartValue;
     } else {
-      Identity = ConstantVector::getSplat({VF, false}, Iden);
+      Identity = ConstantVector::getSplat(VF, Iden);
 
       // This vector is the Identity vector where the first element is the
       // incoming scalar reduction.
@@ -5890,7 +5889,7 @@ unsigned LoopVectorizationCostModel::getGatherScatterCost(Instruction *I,
   return TTI.getAddressComputationCost(VectorTy) +
          TTI.getGatherScatterOpCost(I->getOpcode(), VectorTy, Ptr,
                                     Legal->isMaskRequired(I),
-                                    Alignment ? Alignment->value() : 0, I);
+                                    Alignment ? Alignment->value() : 0);
 }
 
 unsigned LoopVectorizationCostModel::getInterleaveGroupCost(Instruction *I,

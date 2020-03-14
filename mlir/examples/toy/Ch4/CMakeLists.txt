@@ -20,6 +20,7 @@ add_toy_chapter(toyc-ch4
   ToyCh4OpsIncGen
   ToyCh4ShapeInferenceInterfaceIncGen
   ToyCh4CombineIncGen
+  MLIRCallOpInterfacesIncGen
   )
 
 include_directories(include/)
@@ -28,10 +29,8 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR}/include/)
 target_link_libraries(toyc-ch4
   PRIVATE
     MLIRAnalysis
-    MLIRCallInterfaces
     MLIRIR
     MLIRParser
     MLIRPass
-    MLIRSideEffects
     MLIRTransforms)
 

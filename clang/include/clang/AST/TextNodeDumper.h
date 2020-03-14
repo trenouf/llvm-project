@@ -184,7 +184,6 @@ public:
   void dumpBareDeclRef(const Decl *D);
   void dumpName(const NamedDecl *ND);
   void dumpAccessSpecifier(AccessSpecifier AS);
-  void dumpCleanupObject(const ExprWithCleanups::CleanupObject &C);
 
   void dumpDeclRef(const Decl *D, StringRef Label = {});
 

@@ -502,7 +502,7 @@ static void printLocationStats(raw_ostream &OS,
 /// useful, only the delta between compiling the same program with different
 /// compilers is.
 bool collectStatsForObjectFile(ObjectFile &Obj, DWARFContext &DICtx,
-                               const Twine &Filename, raw_ostream &OS) {
+                               Twine Filename, raw_ostream &OS) {
   StringRef FormatName = Obj.getFileFormatName();
   GlobalStats GlobalStats;
   LocationStats LocStats;

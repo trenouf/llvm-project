@@ -138,8 +138,7 @@ public:
   int getMaskedMemoryOpCost(unsigned Opcode, Type *Src, unsigned Alignment,
                             unsigned AddressSpace);
   int getGatherScatterOpCost(unsigned Opcode, Type *DataTy, Value *Ptr,
-                             bool VariableMask, unsigned Alignment,
-                             const Instruction *I);
+                             bool VariableMask, unsigned Alignment);
   int getAddressComputationCost(Type *PtrTy, ScalarEvolution *SE,
                                 const SCEV *Ptr);
 
@@ -147,11 +146,10 @@ public:
 
   int getIntrinsicInstrCost(Intrinsic::ID IID, Type *RetTy,
                             ArrayRef<Type *> Tys, FastMathFlags FMF,
-                            unsigned ScalarizationCostPassed = UINT_MAX,
-                            const Instruction *I = nullptr);
+                            unsigned ScalarizationCostPassed = UINT_MAX);
   int getIntrinsicInstrCost(Intrinsic::ID IID, Type *RetTy,
                             ArrayRef<Value *> Args, FastMathFlags FMF,
-                            unsigned VF = 1, const Instruction *I = nullptr);
+                            unsigned VF = 1);
 
   int getArithmeticReductionCost(unsigned Opcode, Type *Ty,
                                  bool IsPairwiseForm);

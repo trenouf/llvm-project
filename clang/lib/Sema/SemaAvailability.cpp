@@ -14,7 +14,6 @@
 #include "clang/AST/Decl.h"
 #include "clang/AST/RecursiveASTVisitor.h"
 #include "clang/Basic/DiagnosticSema.h"
-#include "clang/Basic/TargetInfo.h"
 #include "clang/Lex/Preprocessor.h"
 #include "clang/Sema/DelayedDiagnostic.h"
 #include "clang/Sema/ScopeInfo.h"

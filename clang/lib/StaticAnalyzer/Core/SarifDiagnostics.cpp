@@ -11,7 +11,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "clang/Analysis/PathDiagnostic.h"
-#include "clang/Basic/FileManager.h"
 #include "clang/Basic/Version.h"
 #include "clang/Lex/Preprocessor.h"
 #include "clang/StaticAnalyzer/Core/AnalyzerOptions.h"

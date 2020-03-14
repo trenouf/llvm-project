@@ -167,13 +167,6 @@ static cl::opt<bool> EnableAtomicOptimizations(
   cl::init(false),
   cl::Hidden);
 
-// Enable conditional discard transformations
-static cl::opt<bool> EnableConditionalDiscardTransformations(
-  "amdgpu-conditional-discard-transformations",
-  cl::desc("Enable conditional discard transformations"),
-  cl::init(false),
-  cl::Hidden);
-
 // Enable Mode register optimization
 static cl::opt<bool> EnableSIModeRegisterPass(
   "amdgpu-mode-register",
@@ -224,7 +217,6 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeAMDGPUTarget() {
   initializeAMDGPUAnnotateUniformValuesPass(*PR);
   initializeAMDGPUArgumentUsageInfoPass(*PR);
   initializeAMDGPUAtomicOptimizerPass(*PR);
-  initializeAMDGPUConditionalDiscardPass(*PR);
   initializeAMDGPULowerKernelArgumentsPass(*PR);
   initializeAMDGPULowerKernelAttributesPass(*PR);
   initializeAMDGPULowerIntrinsicsPass(*PR);
@@ -851,9 +843,6 @@ bool GCNPassConfig::addPreISel() {
   // FIXME: We need to run a pass to propagate the attributes when calls are
   // supported.
 
-  if (EnableConditionalDiscardTransformations)
-    addPass(createAMDGPUConditionalDiscardPass());
-
   // Merge divergent exit nodes. StructurizeCFG won't recognize the multi-exit
   // regions formed by them.
   addPass(&AMDGPUUnifyDivergentExitNodesID);
@@ -861,7 +850,6 @@ bool GCNPassConfig::addPreISel() {
     addPass(createStructurizeCFGPass(true)); // true -> SkipUniformRegions
   }
   addPass(createSinkingPass());
-
   // This is a temporary fix for the issue of dealing with in loop uniform values
   // where the uses out of the loop are non-uniform. LCSSA creates a PHI at the
   // loop exit such that can be marked divergent and can be passed onto ISEL
@@ -870,7 +858,6 @@ bool GCNPassConfig::addPreISel() {
   // therefore can't be preserved in LCSSA as needed. The linking/preserving
   // outside of the same library needs to be resolved in llvm core code.
   addPass(createLCSSAPass());
-
   addPass(createAMDGPUAnnotateUniformValues());
   if (!LateCFGStructurize) {
     addPass(createSIAnnotateControlFlowPass());

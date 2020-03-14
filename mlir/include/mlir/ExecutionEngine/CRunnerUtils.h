@@ -7,8 +7,8 @@
 //===----------------------------------------------------------------------===//
 //
 // This file declares basic classes and functions to manipulate structured MLIR
-// types at runtime. Entities in this file must be compliant with C++11 and be
-// retargetable, including on targets without a C++ runtime.
+// types at runtime. Entities in this file are must be retargetable, including
+// on targets without a C++ runtime.
 //
 //===----------------------------------------------------------------------===//
 
@@ -45,7 +45,9 @@ namespace detail {
 constexpr bool isPowerOf2(int N) { return (!(N & (N - 1))); }
 
 constexpr unsigned nextPowerOf2(int N) {
-  return (N <= 1) ? 1 : (isPowerOf2(N) ? N : (2 * nextPowerOf2((N + 1) / 2)));
+  if (N <= 1)
+    return 1;
+  return isPowerOf2(N) ? N : 2 * nextPowerOf2((N + 1) / 2);
 }
 
 template <typename T, int Dim, bool IsPowerOf2>
@@ -57,8 +59,8 @@ struct Vector1D<T, Dim, /*IsPowerOf2=*/true> {
     static_assert(detail::nextPowerOf2(sizeof(T[Dim])) == sizeof(T[Dim]),
                   "size error");
   }
-  inline T &operator[](unsigned i) { return vector[i]; }
-  inline const T &operator[](unsigned i) const { return vector[i]; }
+  constexpr T &operator[](unsigned i) { return vector[i]; }
+  constexpr const T &operator[](unsigned i) const { return vector[i]; }
 
 private:
   T vector[Dim];
@@ -74,8 +76,8 @@ struct Vector1D<T, Dim, /*IsPowerOf2=*/false> {
     static_assert(detail::nextPowerOf2(sizeof(T[Dim])) < 2 * sizeof(T[Dim]),
                   "size error");
   }
-  inline T &operator[](unsigned i) { return vector[i]; }
-  inline const T &operator[](unsigned i) const { return vector[i]; }
+  constexpr T &operator[](unsigned i) { return vector[i]; }
+  constexpr const T &operator[](unsigned i) const { return vector[i]; }
 
 private:
   T vector[Dim];
@@ -86,8 +88,8 @@ private:
 // N-D vectors recurse down to 1-D.
 template <typename T, int Dim, int... Dims>
 struct Vector {
-  inline Vector<T, Dims...> &operator[](unsigned i) { return vector[i]; }
-  inline const Vector<T, Dims...> &operator[](unsigned i) const {
+  constexpr Vector<T, Dims...> &operator[](unsigned i) { return vector[i]; }
+  constexpr const Vector<T, Dims...> &operator[](unsigned i) const {
     return vector[i];
   }
 

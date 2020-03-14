@@ -191,11 +191,13 @@ public:
 
 class RelocationValueRef {
 public:
-  unsigned SectionID = 0;
-  uint64_t Offset = 0;
-  int64_t Addend = 0;
-  const char *SymbolName = nullptr;
+  unsigned SectionID;
+  uint64_t Offset;
+  int64_t Addend;
+  const char *SymbolName;
   bool IsStubThumb = false;
+  RelocationValueRef() : SectionID(0), Offset(0), Addend(0),
+                         SymbolName(nullptr) {}
 
   inline bool operator==(const RelocationValueRef &Other) const {
     return SectionID == Other.SectionID && Offset == Other.Offset &&

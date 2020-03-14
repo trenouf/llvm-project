@@ -6,7 +6,8 @@ add_mlir_library(MLIRIR
   ${MLIR_MAIN_INCLUDE_DIR}/mlir/IR
 
   DEPENDS
-  MLIRCallInterfacesIncGen
+  MLIRCallOpInterfacesIncGen
+  MLIRSideEffectOpInterfacesIncGen
   MLIROpAsmInterfacesIncGen
   )
 target_link_libraries(MLIRIR

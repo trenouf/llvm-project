@@ -14,10 +14,9 @@
 #include "clang/AST/Mangle.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
 #include "clang/Basic/LLVM.h"
-#include "clang/Basic/TargetInfo.h"
 #include "clang/Tooling/Tooling.h"
-#include "llvm/IR/DataLayout.h"
 #include "gtest/gtest.h"
+#include "llvm/IR/DataLayout.h"
 
 using namespace clang::ast_matchers;
 using namespace clang::tooling;

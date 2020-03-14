@@ -24,7 +24,6 @@
 using namespace clang;
 using namespace ento;
 
-namespace {
 class PutenvWithAutoChecker : public Checker<check::PostCall> {
 private:
   BugType BT{this, "'putenv' function should not be called with auto variables",
@@ -34,7 +33,6 @@ private:
 public:
   void checkPostCall(const CallEvent &Call, CheckerContext &C) const;
 };
-} // namespace
 
 void PutenvWithAutoChecker::checkPostCall(const CallEvent &Call,
                                           CheckerContext &C) const {

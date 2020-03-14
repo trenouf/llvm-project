@@ -20,8 +20,12 @@ StringRef SideEffect::getName() const {
   return def->getValueAsString("effect");
 }
 
-StringRef SideEffect::getBaseEffectName() const {
-  return def->getValueAsString("baseEffectName");
+StringRef SideEffect::getBaseName() const {
+  return def->getValueAsString("baseEffect");
+}
+
+StringRef SideEffect::getInterfaceTrait() const {
+  return def->getValueAsString("interfaceTrait");
 }
 
 StringRef SideEffect::getResource() const {
@@ -40,10 +44,6 @@ bool SideEffect::classof(const Operator::VariableDecorator *var) {
 Operator::var_decorator_range SideEffectTrait::getEffects() const {
   auto *listInit = dyn_cast<llvm::ListInit>(def->getValueInit("effects"));
   return {listInit->begin(), listInit->end()};
-}
-
-StringRef SideEffectTrait::getBaseEffectName() const {
-  return def->getValueAsString("baseEffectName");
 }
 
 bool SideEffectTrait::classof(const OpTrait *t) {

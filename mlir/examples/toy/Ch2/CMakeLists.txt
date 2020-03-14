@@ -21,5 +21,4 @@ target_link_libraries(toyc-ch2
     MLIRAnalysis
     MLIRIR
     MLIRParser
-    MLIRSideEffects
     MLIRTransforms)

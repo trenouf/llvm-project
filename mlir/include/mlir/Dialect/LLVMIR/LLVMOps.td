@@ -14,8 +14,7 @@
 #define LLVMIR_OPS
 
 include "mlir/Dialect/LLVMIR/LLVMOpBase.td"
-include "mlir/Interfaces/ControlFlowInterfaces.td"
-include "mlir/Interfaces/SideEffects.td"
+include "mlir/Analysis/ControlFlowInterfaces.td"
 
 class LLVM_Builder<string builder> {
   string llvmBuilder = builder;
@@ -453,7 +452,7 @@ def LLVM_FreezeOp : LLVM_OneResultOp<"freeze", [SameOperandsAndResultType]>,
 
 // Terminators.
 def LLVM_BrOp : LLVM_TerminatorOp<"br",
-    [DeclareOpInterfaceMethods<BranchOpInterface>, NoSideEffect]> {
+    [DeclareOpInterfaceMethods<BranchOpInterface>]> {
   let arguments = (ins Variadic<LLVM_Type>:$destOperands);
   let successors = (successor AnySuccessor:$dest);
   let assemblyFormat = [{
@@ -462,8 +461,7 @@ def LLVM_BrOp : LLVM_TerminatorOp<"br",
   let builders = [LLVM_TerminatorPassthroughOpBuilder];
 }
 def LLVM_CondBrOp : LLVM_TerminatorOp<"cond_br",
-    [AttrSizedOperandSegments, DeclareOpInterfaceMethods<BranchOpInterface>,
-     NoSideEffect]> {
+    [AttrSizedOperandSegments, DeclareOpInterfaceMethods<BranchOpInterface>]> {
   let arguments = (ins LLVMI1:$condition,
                    Variadic<LLVM_Type>:$trueDestOperands,
                    Variadic<LLVM_Type>:$falseDestOperands);
@@ -488,7 +486,7 @@ def LLVM_CondBrOp : LLVM_TerminatorOp<"cond_br",
             falseOperands);
   }]>, LLVM_TerminatorPassthroughOpBuilder];
 }
-def LLVM_ReturnOp : LLVM_TerminatorOp<"return", [NoSideEffect]>,
+def LLVM_ReturnOp : LLVM_TerminatorOp<"return", []>,
                     Arguments<(ins Variadic<LLVM_Type>:$args)> {
   string llvmBuilder = [{
     if ($_numOperands != 0)

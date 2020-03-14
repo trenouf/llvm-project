@@ -390,7 +390,9 @@ public:
   /// @name Virtual File System
   /// {
 
-  llvm::vfs::FileSystem &getVirtualFileSystem() const;
+  llvm::vfs::FileSystem &getVirtualFileSystem() const {
+    return getFileManager().getVirtualFileSystem();
+  }
 
   /// }
   /// @name File Manager

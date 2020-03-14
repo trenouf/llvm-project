@@ -138,10 +138,8 @@ static bool isCompatible(InputFile *file) {
       return true;
   }
 
-  StringRef target =
-      !config->bfdname.empty() ? config->bfdname : config->emulation;
-  if (!target.empty()) {
-    error(toString(file) + " is incompatible with " + target);
+  if (!config->emulation.empty()) {
+    error(toString(file) + " is incompatible with " + config->emulation);
     return false;
   }
 
@@ -150,11 +148,8 @@ static bool isCompatible(InputFile *file) {
     existing = objectFiles[0];
   else if (!sharedFiles.empty())
     existing = sharedFiles[0];
-  else if (!bitcodeFiles.empty())
-    existing = bitcodeFiles[0];
   else
-    llvm_unreachable("Must have -m, OUTPUT_FORMAT or existing input file to "
-                     "determine target emulation");
+    existing = bitcodeFiles[0];
 
   error(toString(file) + " is incompatible with " + toString(existing));
   return false;

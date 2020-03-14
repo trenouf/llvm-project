@@ -2310,8 +2310,7 @@ bool TargetLowering::SimplifyDemandedVectorElts(
           }
 
         KnownBits Known;
-        if (SimplifyDemandedBits(Src, SrcDemandedBits, SrcDemandedElts, Known,
-                                 TLO, Depth + 1))
+        if (SimplifyDemandedBits(Src, SrcDemandedBits, Known, TLO, Depth + 1))
           return true;
       }
 

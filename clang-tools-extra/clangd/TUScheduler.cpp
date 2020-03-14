@@ -274,9 +274,8 @@ private:
   /// Becomes ready when the first preamble build finishes.
   Notification PreambleWasBuilt;
   /// Set to true to signal run() to finish processing.
-  bool Done;                              /* GUARDED_BY(Mutex) */
-  std::deque<Request> Requests;           /* GUARDED_BY(Mutex) */
-  llvm::Optional<Request> CurrentRequest; /* GUARDED_BY(Mutex) */
+  bool Done;                    /* GUARDED_BY(Mutex) */
+  std::deque<Request> Requests; /* GUARDED_BY(Mutex) */
   mutable std::condition_variable RequestsCV;
   /// Guards the callback that publishes results of AST-related computations
   /// (diagnostics, highlightings) and file statuses.
@@ -371,8 +370,7 @@ ASTWorker::~ASTWorker() {
 #ifndef NDEBUG
   std::lock_guard<std::mutex> Lock(Mutex);
   assert(Done && "handle was not destroyed");
-  assert(Requests.empty() && !CurrentRequest &&
-         "unprocessed requests when destroying ASTWorker");
+  assert(Requests.empty() && "unprocessed requests when destroying ASTWorker");
 #endif
 }
 
@@ -608,10 +606,8 @@ void ASTWorker::getCurrentPreamble(
   auto LastUpdate =
       std::find_if(Requests.rbegin(), Requests.rend(),
                    [](const Request &R) { return R.UpdateType.hasValue(); });
-  // If there were no writes in the queue, and CurrentRequest is not a write,
-  // the preamble is ready now.
-  if (LastUpdate == Requests.rend() &&
-      (!CurrentRequest || CurrentRequest->UpdateType.hasValue())) {
+  // If there were no writes in the queue, the preamble is ready now.
+  if (LastUpdate == Requests.rend()) {
     Lock.unlock();
     return Callback(getPossiblyStalePreamble());
   }
@@ -718,9 +714,9 @@ void ASTWorker::emitTUStatus(TUAction Action,
 
 void ASTWorker::run() {
   while (true) {
+    Request Req;
     {
       std::unique_lock<std::mutex> Lock(Mutex);
-      assert(!CurrentRequest && "A task is already running, multiple workers?");
       for (auto Wait = scheduleLocked(); !Wait.expired();
            Wait = scheduleLocked()) {
         if (Done) {
@@ -738,7 +734,7 @@ void ASTWorker::run() {
           Tracer.emplace("Debounce");
           SPAN_ATTACH(*Tracer, "next_request", Requests.front().Name);
           if (!(Wait == Deadline::infinity())) {
-            emitTUStatus({TUAction::Queued, Requests.front().Name});
+            emitTUStatus({TUAction::Queued, Req.Name});
             SPAN_ATTACH(*Tracer, "sleep_ms",
                         std::chrono::duration_cast<std::chrono::milliseconds>(
                             Wait.time() - steady_clock::now())
@@ -748,28 +744,26 @@ void ASTWorker::run() {
 
         wait(Lock, RequestsCV, Wait);
       }
-      CurrentRequest = std::move(Requests.front());
-      Requests.pop_front();
+      Req = std::move(Requests.front());
+      // Leave it on the queue for now, so waiters don't see an empty queue.
     } // unlock Mutex
 
-    // It is safe to perform reads to CurrentRequest without holding the lock as
-    // only writer is also this thread.
     {
       std::unique_lock<Semaphore> Lock(Barrier, std::try_to_lock);
       if (!Lock.owns_lock()) {
-        emitTUStatus({TUAction::Queued, CurrentRequest->Name});
+        emitTUStatus({TUAction::Queued, Req.Name});
         Lock.lock();
       }
-      WithContext Guard(std::move(CurrentRequest->Ctx));
-      trace::Span Tracer(CurrentRequest->Name);
-      emitTUStatus({TUAction::RunningAction, CurrentRequest->Name});
-      CurrentRequest->Action();
+      WithContext Guard(std::move(Req.Ctx));
+      trace::Span Tracer(Req.Name);
+      emitTUStatus({TUAction::RunningAction, Req.Name});
+      Req.Action();
     }
 
     bool IsEmpty = false;
     {
       std::lock_guard<std::mutex> Lock(Mutex);
-      CurrentRequest.reset();
+      Requests.pop_front();
       IsEmpty = Requests.empty();
     }
     if (IsEmpty)
@@ -849,8 +843,7 @@ bool ASTWorker::shouldSkipHeadLocked() const {
 
 bool ASTWorker::blockUntilIdle(Deadline Timeout) const {
   std::unique_lock<std::mutex> Lock(Mutex);
-  return wait(Lock, RequestsCV, Timeout,
-              [&] { return Requests.empty() && !CurrentRequest; });
+  return wait(Lock, RequestsCV, Timeout, [&] { return Requests.empty(); });
 }
 
 // Render a TUAction to a user-facing string representation.

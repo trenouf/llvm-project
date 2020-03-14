@@ -69,7 +69,8 @@ struct AffineInlinerInterface : public DialectInlinerInterface {
 
 AffineOpsDialect::AffineOpsDialect(MLIRContext *context)
     : Dialect(getDialectNamespace(), context) {
-  addOperations<AffineDmaStartOp, AffineDmaWaitOp, AffineLoadOp, AffineStoreOp,
+  addOperations<AffineApplyOp, AffineDmaStartOp, AffineDmaWaitOp, AffineLoadOp,
+                AffineStoreOp,
 #define GET_OP_LIST
 #include "mlir/Dialect/AffineOps/AffineOps.cpp.inc"
                 >();
@@ -216,12 +217,18 @@ verifyDimAndSymbolIdentifiers(OpTy &op, Operation::operand_range operands,
 // AffineApplyOp
 //===----------------------------------------------------------------------===//
 
+void AffineApplyOp::build(Builder *builder, OperationState &result,
+                          AffineMap map, ValueRange operands) {
+  result.addOperands(operands);
+  result.types.append(map.getNumResults(), builder->getIndexType());
+  result.addAttribute("map", AffineMapAttr::get(map));
+}
+
 AffineValueMap AffineApplyOp::getAffineValueMap() {
   return AffineValueMap(getAffineMap(), getOperands(), getResult());
 }
 
-static ParseResult parseAffineApplyOp(OpAsmParser &parser,
-                                      OperationState &result) {
+ParseResult AffineApplyOp::parse(OpAsmParser &parser, OperationState &result) {
   auto &builder = parser.getBuilder();
   auto indexTy = builder.getIndexType();
 
@@ -243,25 +250,39 @@ static ParseResult parseAffineApplyOp(OpAsmParser &parser,
   return success();
 }
 
-static void print(OpAsmPrinter &p, AffineApplyOp op) {
-  p << AffineApplyOp::getOperationName() << " " << op.mapAttr();
-  printDimAndSymbolList(op.operand_begin(), op.operand_end(),
-                        op.getAffineMap().getNumDims(), p);
-  p.printOptionalAttrDict(op.getAttrs(), /*elidedAttrs=*/{"map"});
+void AffineApplyOp::print(OpAsmPrinter &p) {
+  p << "affine.apply " << getAttr("map");
+  printDimAndSymbolList(operand_begin(), operand_end(),
+                        getAffineMap().getNumDims(), p);
+  p.printOptionalAttrDict(getAttrs(), /*elidedAttrs=*/{"map"});
 }
 
-static LogicalResult verify(AffineApplyOp op) {
+LogicalResult AffineApplyOp::verify() {
+  // Check that affine map attribute was specified.
+  auto affineMapAttr = getAttrOfType<AffineMapAttr>("map");
+  if (!affineMapAttr)
+    return emitOpError("requires an affine map");
+
   // Check input and output dimensions match.
-  auto map = op.map();
+  auto map = affineMapAttr.getValue();
 
   // Verify that operand count matches affine map dimension and symbol count.
-  if (op.getNumOperands() != map.getNumDims() + map.getNumSymbols())
-    return op.emitOpError(
+  if (getNumOperands() != map.getNumDims() + map.getNumSymbols())
+    return emitOpError(
         "operand count and affine map dimension and symbol count must match");
+
+  // Verify that all operands are of `index` type.
+  for (Type t : getOperandTypes()) {
+    if (!t.isIndex())
+      return emitOpError("operands must be of type 'index'");
+  }
+
+  if (!getResult().getType().isIndex())
+    return emitOpError("result must be of type 'index'");
 
   // Verify that the map only produces one result.
   if (map.getNumResults() != 1)
-    return op.emitOpError("mapping must produce one value");
+    return emitOpError("mapping must produce one value");
 
   return success();
 }

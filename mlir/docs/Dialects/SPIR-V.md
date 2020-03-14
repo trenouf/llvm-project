@@ -742,11 +742,11 @@ instructions.
 
 SPIR-V compilation should also take into consideration of the execution
 environment, so we generate SPIR-V modules valid for the target environment.
-This is conveyed by the `spv.target_env` (`spirv::TargetEnvAttr`) attribute. It
-should be of `#spv.target_env` attribute kind, which is defined as:
+This is conveyed by the `spv.target_env` attribute. It should be of
+`#spv.target_env` attribute kind, which is defined as:
 
 ```
-spirv-version    ::= `v1.0` | `v1.1` | ...
+spirv-version    ::= `V_1_0` | `V_1_1` | ...
 spirv-extension  ::= `SPV_KHR_16bit_storage` | `SPV_EXT_physical_storage_buffer` | ...
 spirv-capability ::= `Shader` | `Kernel` | `GroupNonUniform` | ...
 
@@ -758,22 +758,18 @@ spirv-capability-elements ::= spirv-capability (`,` spirv-capability)*
 
 spirv-resource-limits ::= dictionary-attribute
 
-spirv-vce-attribute ::= `#` `spv.vce` `<`
-                            spirv-version `,`
-                            spirv-capability-list `,`
-                            spirv-extensions-list `>`
-
 spirv-target-env-attribute ::= `#` `spv.target_env` `<`
-                                  spirv-vce-attribute,
+                                  spirv-version `,`
+                                  spirv-extensions-list `,`
+                                  spirv-capability-list `,`
                                   spirv-resource-limits `>`
 ```
 
 The attribute has a few fields:
 
-*   A `#spv.vce` (`spirv::VerCapExtAttr`) attribute:
-    *   The target SPIR-V version.
-    *   A list of SPIR-V extensions for the target.
-    *   A list of SPIR-V capabilities for the target.
+*   The target SPIR-V version.
+*   A list of SPIR-V extensions for the target.
+*   A list of SPIR-V capabilities for the target.
 *   A dictionary of target resource limits (see the
     [Vulkan spec][VulkanResourceLimits] for explanation):
     *   `max_compute_workgroup_invocations`
@@ -784,7 +780,7 @@ For example,
 ```
 module attributes {
 spv.target_env = #spv.target_env<
-    #spv.vce<v1.3, [Shader, GroupNonUniform], [SPV_KHR_8bit_storage]>,
+    V_1_3, [SPV_KHR_8bit_storage], [Shader, GroupNonUniform]
     {
       max_compute_workgroup_invocations = 128 : i32,
       max_compute_workgroup_size = dense<[128, 128, 64]> : vector<3xi32>
@@ -792,11 +788,9 @@ spv.target_env = #spv.target_env<
 } { ... }
 ```
 
-Dialect conversion framework will utilize the information in `spv.target_env` to
-properly filter out patterns and ops not available in the target execution
-environment. When targeting SPIR-V, one needs to create a
-[`SPIRVConversionTarget`](#spirvconversiontarget) by providing such an
-attribute.
+Dialect conversion framework will utilize the information in `spv.target_env`
+to properly filter out patterns and ops not available in the target execution
+environment.
 
 ## Shader interface (ABI)
 
@@ -932,10 +926,6 @@ The `mlir::spirv::SPIRVConversionTarget` class derives from the
 target satisfying a given [`spv.target_env`](#target-environment). It registers
 proper hooks to check the dynamic legality of SPIR-V ops. Users can further
 register other legality constraints into the returned `SPIRVConversionTarget`.
-
-`spirv::lookupTargetEnvOrDefault()` is a handy utility function to query an
-`spv.target_env` attached in the input IR or use the feault to construct a
-`SPIRVConversionTarget`.
 
 ### `SPIRVTypeConverter`
 

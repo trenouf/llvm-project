@@ -14,7 +14,6 @@ target_link_libraries(MLIRLoopOps
   PUBLIC
   MLIREDSC
   MLIRIR
-  MLIRSideEffects
   MLIRStandardOps
   LLVMSupport
   )

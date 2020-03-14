@@ -9,7 +9,6 @@
 #include "llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h"
 #include "llvm/ExecutionEngine/SectionMemoryManager.h"
 #include "llvm/Support/Debug.h"
-#include "llvm/Support/Host.h"
 
 #include "ThinLtoDiscoveryThread.h"
 #include "ThinLtoInstrumentationLayer.h"

@@ -68,8 +68,6 @@ private:
 
   bool kill(MachineInstr &MI);
 
-  void demoteCleanup(MachineInstr &MI);
-
   bool skipMaskBranch(MachineInstr &MI, MachineBasicBlock &MBB);
 
   bool optimizeVccBranch(MachineInstr &MI) const;
@@ -313,6 +311,7 @@ bool SIInsertSkips::kill(MachineInstr &MI) {
     }
     return true;
   }
+  case AMDGPU::SI_DEMOTE_I1_TERMINATOR:
   case AMDGPU::SI_KILL_I1_TERMINATOR: {
     const MachineFunction *MF = MI.getParent()->getParent();
     const GCNSubtarget &ST = MF->getSubtarget<GCNSubtarget>();
@@ -345,28 +344,6 @@ bool SIInsertSkips::kill(MachineInstr &MI) {
   }
   default:
     llvm_unreachable("invalid opcode, expected SI_KILL_*_TERMINATOR");
-  }
-}
-
-void SIInsertSkips::demoteCleanup(MachineInstr &MI) {
-  MachineBasicBlock &MBB = *MI.getParent();
-  DebugLoc DL = MI.getDebugLoc();
-
-  switch (MI.getOpcode()) {
-  case AMDGPU::SI_DEMOTE_CLEANUP_B32_TERMINATOR:
-    BuildMI(MBB, &MI, DL, TII->get(AMDGPU::S_AND_B32), AMDGPU::EXEC_LO)
-        .addReg(AMDGPU::EXEC_LO)
-        .add(MI.getOperand(0));
-    break;
-
-  case AMDGPU::SI_DEMOTE_CLEANUP_B64_TERMINATOR:
-    BuildMI(MBB, &MI, DL, TII->get(AMDGPU::S_AND_B64), AMDGPU::EXEC)
-        .addReg(AMDGPU::EXEC)
-        .add(MI.getOperand(0));
-    break;
-
-  default:
-    llvm_unreachable("invalid opcode, expected SI_DEMOTE_CLEANUP_*_TERMINATOR");
   }
 }
 
@@ -512,7 +489,8 @@ bool SIInsertSkips::runOnMachineFunction(MachineFunction &MF) {
         break;
 
       case AMDGPU::SI_KILL_F32_COND_IMM_TERMINATOR:
-      case AMDGPU::SI_KILL_I1_TERMINATOR: {
+      case AMDGPU::SI_KILL_I1_TERMINATOR:
+      case AMDGPU::SI_DEMOTE_I1_TERMINATOR: {
         MadeChange = true;
         bool CanKill = kill(MI);
 
@@ -536,18 +514,6 @@ bool SIInsertSkips::runOnMachineFunction(MachineFunction &MF) {
         }
         break;
       }
-
-      case AMDGPU::SI_DEMOTE_CLEANUP_B32_TERMINATOR:
-      case AMDGPU::SI_DEMOTE_CLEANUP_B64_TERMINATOR:
-        assert(MF.getFunction().getCallingConv() == CallingConv::AMDGPU_PS);
-        demoteCleanup(MI);
-        if (dominatesAllReachable(MBB)) {
-          // As with kill we can null export if all lanes are demoted.
-          KillInstrs.push_back(&MI);
-        } else {
-          MI.eraseFromParent();
-        }
-        break;
 
       case AMDGPU::SI_RETURN_TO_EPILOG:
         // FIXME: Should move somewhere else

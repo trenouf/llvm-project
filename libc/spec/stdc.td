@@ -16,17 +16,6 @@ def StdC : StandardSpec<"stdc"> {
 
   PtrType IntPtr = PtrType<IntType>;
 
-  HeaderSpec Assert = HeaderSpec<
-      "assert.h",
-      [
-          Macro<"static_assert">,
-          Macro<"assert">,
-      ],
-      [], // Types
-      [], // Enumerations
-      []
-  >;
-
   HeaderSpec String = HeaderSpec<
       "string.h",
       [
@@ -296,7 +285,6 @@ def StdC : StandardSpec<"stdc"> {
   >;
 
   let Headers = [
-    Assert,
     Errno,
     Math,
     String,

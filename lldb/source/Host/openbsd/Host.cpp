@@ -193,11 +193,11 @@ uint32_t Host::FindProcesses(const ProcessInstanceInfoMatch &match_info,
         GetOpenBSDProcessArgs(&match_info, process_info)) {
       GetOpenBSDProcessCPUType(process_info);
       if (match_info.Matches(process_info))
-        process_infos.push_back(process_info);
+        process_infos.Append(process_info);
     }
   }
 
-  return process_infos.size();
+  return process_infos.GetSize();
 }
 
 bool Host::GetProcessInfo(lldb::pid_t pid, ProcessInstanceInfo &process_info) {

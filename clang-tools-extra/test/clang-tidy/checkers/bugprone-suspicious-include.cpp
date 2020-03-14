@@ -14,6 +14,9 @@
 
 #include "b.h"
 
+// CHECK-MESSAGES: [[@LINE+1]]:10: warning: suspicious #import of file with '.c' extension
+#import "c.c"
+
 // CHECK-MESSAGES: [[@LINE+1]]:16: warning: suspicious #include_next of file with '.c' extension
 #include_next <c.c>
 

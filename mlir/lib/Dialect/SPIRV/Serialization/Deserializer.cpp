@@ -12,7 +12,6 @@
 
 #include "mlir/Dialect/SPIRV/Serialization.h"
 
-#include "mlir/Dialect/SPIRV/SPIRVAttributes.h"
 #include "mlir/Dialect/SPIRV/SPIRVBinaryUtils.h"
 #include "mlir/Dialect/SPIRV/SPIRVOps.h"
 #include "mlir/Dialect/SPIRV/SPIRVTypes.h"
@@ -107,6 +106,9 @@ private:
   /// in the deserializer.
   LogicalResult processCapability(ArrayRef<uint32_t> operands);
 
+  /// Attaches all collected capabilities to `module` as an attribute.
+  void attachCapabilities();
+
   /// Processes the SPIR-V OpExtension with `operands` and updates bookkeeping
   /// in the deserializer.
   LogicalResult processExtension(ArrayRef<uint32_t> words);
@@ -115,9 +117,8 @@ private:
   /// bookkeeping in the deserializer.
   LogicalResult processExtInstImport(ArrayRef<uint32_t> words);
 
-  /// Attaches (version, capabilities, extensions) triple to `module` as an
-  /// attribute.
-  void attachVCETriple();
+  /// Attaches all collected extensions to `module` as an attribute.
+  void attachExtensions();
 
   /// Processes the SPIR-V OpMemoryModel with `operands` and updates `module`.
   LogicalResult processMemoryModel(ArrayRef<uint32_t> operands);
@@ -396,13 +397,11 @@ private:
 
   OpBuilder opBuilder;
 
-  spirv::Version version;
-
   /// The list of capabilities used by the module.
   llvm::SmallSetVector<spirv::Capability, 4> capabilities;
 
   /// The list of extensions used by the module.
-  llvm::SmallSetVector<spirv::Extension, 2> extensions;
+  llvm::SmallSetVector<StringRef, 2> extensions;
 
   // Result <id> to type mapping.
   DenseMap<uint32_t, Type> typeMap;
@@ -508,7 +507,9 @@ LogicalResult Deserializer::deserialize() {
     }
   }
 
-  attachVCETriple();
+  // Attaches the capabilities/extensions as an attribute to the module.
+  attachCapabilities();
+  attachExtensions();
 
   LLVM_DEBUG(llvm::dbgs() << "+++ completed deserialization +++\n");
   return success();
@@ -523,6 +524,9 @@ Optional<spirv::ModuleOp> Deserializer::collect() { return module; }
 spirv::ModuleOp Deserializer::createModuleOp() {
   Builder builder(context);
   OperationState state(unknownLoc, spirv::ModuleOp::getOperationName());
+  // TODO(antiagainst): use target environment to select the version
+  state.addAttribute("major_version", builder.getI32IntegerAttr(1));
+  state.addAttribute("minor_version", builder.getI32IntegerAttr(0));
   spirv::ModuleOp::build(&builder, state);
   return cast<spirv::ModuleOp>(Operation::create(state));
 }
@@ -534,32 +538,6 @@ LogicalResult Deserializer::processHeader() {
 
   if (binary[0] != spirv::kMagicNumber)
     return emitError(unknownLoc, "incorrect magic number");
-
-  // Version number bytes: 0 | major number | minor number | 0
-  uint32_t majorVersion = (binary[1] << 8) >> 24;
-  uint32_t minorVersion = (binary[1] << 16) >> 24;
-  if (majorVersion == 1) {
-    switch (minorVersion) {
-#define MIN_VERSION_CASE(v)                                                    \
-  case v:                                                                      \
-    version = spirv::Version::V_1_##v;                                         \
-    break
-
-      MIN_VERSION_CASE(0);
-      MIN_VERSION_CASE(1);
-      MIN_VERSION_CASE(2);
-      MIN_VERSION_CASE(3);
-      MIN_VERSION_CASE(4);
-      MIN_VERSION_CASE(5);
-#undef MIN_VERSION_CASE
-    default:
-      return emitError(unknownLoc, "unspported SPIR-V minor version: ")
-             << minorVersion;
-    }
-  } else {
-    return emitError(unknownLoc, "unspported SPIR-V major version: ")
-           << majorVersion;
-  }
 
   // TODO(antiagainst): generator number, bound, schema
   curOffset = spirv::kHeaderWordCount;
@@ -578,6 +556,20 @@ LogicalResult Deserializer::processCapability(ArrayRef<uint32_t> operands) {
   return success();
 }
 
+void Deserializer::attachCapabilities() {
+  if (capabilities.empty())
+    return;
+
+  SmallVector<StringRef, 2> caps;
+  caps.reserve(capabilities.size());
+
+  for (auto cap : capabilities) {
+    caps.push_back(spirv::stringifyCapability(cap));
+  }
+
+  module->setAttr("capabilities", opBuilder.getStrArrayAttr(caps));
+}
+
 LogicalResult Deserializer::processExtension(ArrayRef<uint32_t> words) {
   if (words.empty()) {
     return emitError(
@@ -587,14 +579,12 @@ LogicalResult Deserializer::processExtension(ArrayRef<uint32_t> words) {
 
   unsigned wordIndex = 0;
   StringRef extName = decodeStringLiteral(words, wordIndex);
-  if (wordIndex != words.size())
+  if (wordIndex != words.size()) {
     return emitError(unknownLoc,
                      "unexpected trailing words in OpExtension instruction");
-  auto ext = spirv::symbolizeExtension(extName);
-  if (!ext)
-    return emitError(unknownLoc, "unknown extension: ") << extName;
+  }
 
-  extensions.insert(*ext);
+  extensions.insert(extName);
   return success();
 }
 
@@ -614,10 +604,12 @@ LogicalResult Deserializer::processExtInstImport(ArrayRef<uint32_t> words) {
   return success();
 }
 
-void Deserializer::attachVCETriple() {
-  module->setAttr(spirv::ModuleOp::getVCETripleAttrName(),
-                  spirv::VerCapExtAttr::get(version, capabilities.getArrayRef(),
-                                            extensions.getArrayRef(), context));
+void Deserializer::attachExtensions() {
+  if (extensions.empty())
+    return;
+
+  module->setAttr("extensions",
+                  opBuilder.getStrArrayAttr(extensions.getArrayRef()));
 }
 
 LogicalResult Deserializer::processMemoryModel(ArrayRef<uint32_t> operands) {

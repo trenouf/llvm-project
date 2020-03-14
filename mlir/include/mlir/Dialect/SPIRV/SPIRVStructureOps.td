@@ -15,9 +15,8 @@
 #ifndef SPIRV_STRUCTURE_OPS
 #define SPIRV_STRUCTURE_OPS
 
+include "mlir/Analysis/CallInterfaces.td"
 include "mlir/Dialect/SPIRV/SPIRVBase.td"
-include "mlir/Interfaces/CallInterfaces.td"
-include "mlir/Interfaces/SideEffects.td"
 
 // -----
 
@@ -67,7 +66,7 @@ def SPV_AddressOfOp : SPV_Op<"_address_of", [InFunctionScope, NoSideEffect]> {
 
 // -----
 
-def SPV_ConstantOp : SPV_Op<"constant", [ConstantLike, NoSideEffect]> {
+def SPV_ConstantOp : SPV_Op<"constant", [NoSideEffect]> {
   let summary = "The op that declares a SPIR-V normal constant";
 
   let description = [{
@@ -382,25 +381,25 @@ def SPV_ModuleOp : SPV_Op<"module",
     ### Custom assembly form
 
     ```
-    addressing-model ::= `Logical` | `Physical32` | `Physical64` | ...
-    memory-model ::= `Simple` | `GLSL450` | `OpenCL` | `Vulkan` | ...
+    addressing-model ::= `"Logical"` | `"Physical32"` | `"Physical64"`
+    memory-model ::= `"Simple"` | `"GLSL450"` | `"OpenCL"` | `"VulkanKHR"`
     spv-module-op ::= `spv.module` addressing-model memory-model
-                      (requires  spirv-vce-attribute)?
-                      (`attributes` attribute-dict)?
                       region
+                      (`attributes` attribute-dict)?
     ```
 
     For example:
 
     ```
-    spv.module Logical GLSL450  {}
+    spv.module "Logical" "VulkanKHR" { }
 
-    spv.module Logical Vulkan
-        requires #spv.vce<v1.0, [Shader], [SPV_KHR_vulkan_memory_model]>
-        attributes { some_additional_attr = ... } {
-      spv.func @do_nothing() -> () {
+    spv.module "Logical" "VulkanKHR" {
+      func @do_nothing() -> () {
         spv.Return
       }
+    } attributes {
+      capability = ["Shader"],
+      extension = ["SPV_KHR_16bit_storage"]
     }
     ```
   }];
@@ -408,19 +407,26 @@ def SPV_ModuleOp : SPV_Op<"module",
   let arguments = (ins
     SPV_AddressingModelAttr:$addressing_model,
     SPV_MemoryModelAttr:$memory_model,
-    OptionalAttr<SPV_VerCapExtAttr>:$vce_triple
+    OptionalAttr<StrArrayAttr>:$capabilities,
+    OptionalAttr<StrArrayAttr>:$extensions,
+    OptionalAttr<StrArrayAttr>:$extended_instruction_sets
   );
 
   let results = (outs);
 
   let regions = (region SizedRegion<1>:$body);
 
-  let builders = [
-    OpBuilder<[{Builder *, OperationState &state}]>,
-    OpBuilder<[{Builder *, OperationState &state,
-                spirv::AddressingModel addressing_model,
-                spirv::MemoryModel memory_model}]>
-  ];
+  let builders =
+    [OpBuilder<"Builder *, OperationState &state">,
+     OpBuilder<[{Builder *, OperationState &state,
+                 IntegerAttr addressing_model,
+                 IntegerAttr memory_model}]>,
+     OpBuilder<[{Builder *, OperationState &state,
+                 spirv::AddressingModel addressing_model,
+                 spirv::MemoryModel memory_model,
+                 /*optional*/ ArrayRef<spirv::Capability> capabilities = {},
+                 /*optional*/ ArrayRef<spirv::Extension> extensions = {},
+                 /*optional*/ ArrayAttr extended_instruction_sets = nullptr}]>];
 
   // We need to ensure the block inside the region is properly terminated;
   // the auto-generated builders do not guarantee that.
@@ -431,8 +437,6 @@ def SPV_ModuleOp : SPV_Op<"module",
   let autogenSerialization = 0;
 
   let extraClassDeclaration = [{
-    static StringRef getVCETripleAttrName() { return "vce_triple"; }
-
     Block& getBlock() {
       return this->getOperation()->getRegion(0).front();
     }

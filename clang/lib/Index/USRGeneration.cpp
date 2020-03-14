@@ -11,7 +11,6 @@
 #include "clang/AST/Attr.h"
 #include "clang/AST/DeclTemplate.h"
 #include "clang/AST/DeclVisitor.h"
-#include "clang/Basic/FileManager.h"
 #include "clang/Lex/PreprocessingRecord.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/raw_ostream.h"

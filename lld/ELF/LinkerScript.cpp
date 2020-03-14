@@ -685,9 +685,7 @@ void LinkerScript::addOrphanSections() {
       orphanSections.push_back(s);
 
       StringRef name = getOutputSectionName(s);
-      if (config->unique) {
-        v.push_back(createSection(s, name));
-      } else if (OutputSection *sec = findByName(sectionCommands, name)) {
+      if (OutputSection *sec = findByName(sectionCommands, name)) {
         sec->recordSection(s);
       } else {
         if (OutputSection *os = addInputSec(map, s, name))
@@ -777,13 +775,18 @@ void LinkerScript::switchTo(OutputSection *sec) {
   ctx->outSec = sec;
 
   uint64_t pos = advance(0, 1);
-  if (sec->addrExpr && script->hasSectionsCommand) {
+  if (sec->addrExpr && !sec->alignExpr) {
     // The alignment is ignored.
     ctx->outSec->addr = pos;
   } else {
-    // ctx->outSec->alignment is the max of ALIGN and the maximum of input
-    // section alignments.
-    ctx->outSec->addr = advance(0, ctx->outSec->alignment);
+    // If ALIGN is specified, advance sh_addr according to ALIGN and ignore the
+    // maximum of input section alignments.
+    //
+    // When no SECTIONS command is given, sec->alignExpr is set to the maximum
+    // of input section alignments.
+    uint32_t align =
+        sec->alignExpr ? sec->alignExpr().getValue() : ctx->outSec->alignment;
+    ctx->outSec->addr = advance(0, align);
     expandMemoryRegions(ctx->outSec->addr - pos);
   }
 }
@@ -849,7 +852,10 @@ void LinkerScript::assignOffsets(OutputSection *sec) {
     expandMemoryRegion(ctx->memRegion, dot - ctx->memRegion->curPos,
                        ctx->memRegion->name, sec->name);
 
+  uint64_t oldDot = dot;
   switchTo(sec);
+  if (sec->addrExpr && oldDot != dot)
+    changedSectionAddresses.push_back({sec, oldDot});
 
   ctx->lmaOffset = 0;
 
@@ -1121,6 +1127,7 @@ const Defined *LinkerScript::assignAddresses() {
   auto deleter = std::make_unique<AddressState>();
   ctx = deleter.get();
   errorOnMissingSection = true;
+  changedSectionAddresses.clear();
   switchTo(aether);
 
   SymbolAssignmentMap oldValues = getSymbolAssignmentValues(sectionCommands);

@@ -13,7 +13,6 @@
 //   http://itanium-cxx-abi.github.io/cxx-abi/abi.html#mangling
 //
 //===----------------------------------------------------------------------===//
-
 #include "clang/AST/Mangle.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/Attr.h"
@@ -28,7 +27,6 @@
 #include "clang/AST/ExprObjC.h"
 #include "clang/AST/TypeLoc.h"
 #include "clang/Basic/ABI.h"
-#include "clang/Basic/Module.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Basic/TargetInfo.h"
 #include "llvm/ADT/StringExtras.h"

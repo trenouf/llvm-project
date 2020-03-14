@@ -25,7 +25,6 @@
 #include "clang/Basic/DiagnosticSema.h"
 #include "clang/Basic/OpenMPKinds.h"
 #include "clang/Basic/PartialDiagnostic.h"
-#include "clang/Basic/TargetInfo.h"
 #include "clang/Sema/Initialization.h"
 #include "clang/Sema/Lookup.h"
 #include "clang/Sema/Scope.h"
@@ -5091,6 +5090,12 @@ StmtResult Sema::ActOnOpenMPExecutableDirective(
   if (ErrorFound)
     return StmtError();
 
+  if (!(Res.getAs<OMPExecutableDirective>()->isStandaloneDirective())) {
+    Res.getAs<OMPExecutableDirective>()
+        ->getStructuredBlock()
+        ->setIsOMPStructuredBlock(true);
+  }
+
   if (!CurContext->isDependentContext() &&
       isOpenMPTargetExecutionDirective(Kind) &&
       !(DSAStack->hasRequiresDeclWithClause<OMPUnifiedSharedMemoryClause>() ||
@@ -6879,7 +6884,7 @@ Expr *OpenMPIterationSpaceChecker::buildOrderedLoopData(
     // Upper - Lower
     Expr *Upper = TestIsLessOp.getValue()
                       ? Cnt
-                      : tryBuildCapture(SemaRef, LB, Captures).get();
+                      : tryBuildCapture(SemaRef, UB, Captures).get();
     Expr *Lower = TestIsLessOp.getValue()
                       ? tryBuildCapture(SemaRef, LB, Captures).get()
                       : Cnt;

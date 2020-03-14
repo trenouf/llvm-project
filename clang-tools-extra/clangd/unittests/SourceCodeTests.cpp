@@ -215,9 +215,8 @@ TEST(SourceCodeTests, PositionToOffset) {
     for (unsigned I = 0; I <= L.Length; ++I)
       EXPECT_THAT_EXPECTED(positionToOffset(File, position(L.Number, I)),
                            llvm::HasValue(L.Offset + I));
-    EXPECT_THAT_EXPECTED(
-        positionToOffset(File, position(L.Number, L.Length + 1)),
-        llvm::HasValue(L.Offset + L.Length));
+    EXPECT_THAT_EXPECTED(positionToOffset(File, position(L.Number, L.Length+1)),
+                         llvm::HasValue(L.Offset + L.Length));
     EXPECT_THAT_EXPECTED(
         positionToOffset(File, position(L.Number, L.Length + 1), false),
         llvm::Failed()); // out of range
@@ -414,10 +413,9 @@ TEST(SourceCodeTests, VisibleNamespaces) {
           {""},
       },
   };
-  for (const auto &Case : Cases) {
+  for (const auto& Case : Cases) {
     EXPECT_EQ(Case.second,
-              visibleNamespaces(Case.first, format::getFormattingLangOpts(
-                                                format::getLLVMStyle())))
+              visibleNamespaces(Case.first, format::getLLVMStyle()))
         << Case.first;
   }
 }
@@ -452,7 +450,7 @@ TEST(SourceCodeTests, WorksAtBeginOfFile) {
   EXPECT_THAT(*Result, MacroName("MACRO"));
 }
 
-TEST(SourceCodeTests, IsInsideMainFile) {
+TEST(SourceCodeTests, IsInsideMainFile){
   TestTU TU;
   TU.HeaderCode = R"cpp(
     #define DEFINE_CLASS(X) class X {};
@@ -473,7 +471,7 @@ TEST(SourceCodeTests, IsInsideMainFile) {
   TU.ExtraArgs.push_back("-DHeader=Header3");
   TU.ExtraArgs.push_back("-DMain=Main3");
   auto AST = TU.build();
-  const auto &SM = AST.getSourceManager();
+  const auto& SM = AST.getSourceManager();
   auto DeclLoc = [&AST](llvm::StringRef Name) {
     return findDecl(AST, Name).getLocation();
   };
@@ -576,7 +574,7 @@ $foo^#include "foo.inc"
   TU.AdditionalFiles["foo.inc"] = "int foo;\n";
   TU.AdditionalFiles["bar.inc"] = "int bar;\n";
   auto AST = TU.build();
-  const auto &SM = AST.getSourceManager();
+  const auto& SM = AST.getSourceManager();
 
   FileID Foo = SM.getFileID(findDecl(AST, "foo").getLocation());
   EXPECT_EQ(SM.getFileOffset(includeHashLoc(Foo, SM)),
@@ -640,9 +638,8 @@ TEST(SourceCodeTests, GetEligiblePoints) {
   for (auto Case : Cases) {
     Annotations Test(Case.Code);
 
-    auto Res = getEligiblePoints(
-        Test.code(), Case.FullyQualifiedName,
-        format::getFormattingLangOpts(format::getLLVMStyle()));
+    auto Res = getEligiblePoints(Test.code(), Case.FullyQualifiedName,
+                                 format::getLLVMStyle());
     EXPECT_THAT(Res.EligiblePoints, testing::ElementsAreArray(Test.points()))
         << Test.code();
     EXPECT_EQ(Res.EnclosingNamespace, Case.EnclosingNamespace) << Test.code();

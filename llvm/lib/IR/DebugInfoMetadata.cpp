@@ -479,9 +479,8 @@ DISubroutineType *DISubroutineType::getImpl(LLVMContext &Context, DIFlags Flags,
 // FIXME: Implement this string-enum correspondence with a .def file and macros,
 // so that the association is explicit rather than implied.
 static const char *ChecksumKindName[DIFile::CSK_Last] = {
-    "CSK_MD5",
-    "CSK_SHA1",
-    "CSK_SHA256",
+  "CSK_MD5",
+  "CSK_SHA1"
 };
 
 StringRef DIFile::getChecksumKindAsString(ChecksumKind CSKind) {
@@ -496,7 +495,6 @@ Optional<DIFile::ChecksumKind> DIFile::getChecksumKind(StringRef CSKindStr) {
   return StringSwitch<Optional<DIFile::ChecksumKind>>(CSKindStr)
       .Case("CSK_MD5", DIFile::CSK_MD5)
       .Case("CSK_SHA1", DIFile::CSK_SHA1)
-      .Case("CSK_SHA256", DIFile::CSK_SHA256)
       .Default(None);
 }
 
@@ -523,23 +521,16 @@ DICompileUnit *DICompileUnit::getImpl(
     Metadata *GlobalVariables, Metadata *ImportedEntities, Metadata *Macros,
     uint64_t DWOId, bool SplitDebugInlining, bool DebugInfoForProfiling,
     unsigned NameTableKind, bool RangesBaseAddress, MDString *SysRoot,
-    MDString *SDK, StorageType Storage, bool ShouldCreate) {
+    StorageType Storage, bool ShouldCreate) {
   assert(Storage != Uniqued && "Cannot unique DICompileUnit");
   assert(isCanonical(Producer) && "Expected canonical MDString");
   assert(isCanonical(Flags) && "Expected canonical MDString");
   assert(isCanonical(SplitDebugFilename) && "Expected canonical MDString");
 
-  Metadata *Ops[] = {File,
-                     Producer,
-                     Flags,
-                     SplitDebugFilename,
-                     EnumTypes,
-                     RetainedTypes,
-                     GlobalVariables,
-                     ImportedEntities,
-                     Macros,
-                     SysRoot,
-                     SDK};
+  Metadata *Ops[] = {
+      File,      Producer,      Flags,           SplitDebugFilename,
+      EnumTypes, RetainedTypes, GlobalVariables, ImportedEntities,
+      Macros,    SysRoot};
   return storeImpl(new (array_lengthof(Ops)) DICompileUnit(
                        Context, Storage, SourceLanguage, IsOptimized,
                        RuntimeVersion, EmissionKind, DWOId, SplitDebugInlining,
@@ -719,13 +710,12 @@ DICommonBlock *DICommonBlock::getImpl(LLVMContext &Context, Metadata *Scope,
 
 DIModule *DIModule::getImpl(LLVMContext &Context, Metadata *Scope,
                             MDString *Name, MDString *ConfigurationMacros,
-                            MDString *IncludePath, MDString *APINotesFile,
-                            StorageType Storage, bool ShouldCreate) {
+                            MDString *IncludePath, StorageType Storage,
+                            bool ShouldCreate) {
   assert(isCanonical(Name) && "Expected canonical MDString");
-  DEFINE_GETIMPL_LOOKUP(
-      DIModule, (Scope, Name, ConfigurationMacros, IncludePath, APINotesFile));
-  Metadata *Ops[] = {Scope, Name, ConfigurationMacros, IncludePath,
-                     APINotesFile};
+  DEFINE_GETIMPL_LOOKUP(DIModule,
+                        (Scope, Name, ConfigurationMacros, IncludePath));
+  Metadata *Ops[] = {Scope, Name, ConfigurationMacros, IncludePath};
   DEFINE_GETIMPL_STORE_NO_CONSTRUCTOR_ARGS(DIModule, Ops);
 }
 

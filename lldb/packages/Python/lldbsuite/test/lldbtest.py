@@ -687,9 +687,6 @@ class Base(unittest2.TestCase):
     @classmethod
     def setUpCommands(cls):
         commands = [
-            # First of all, clear all settings to have clean state of global properties.
-            "settings clear -all",
-
             # Disable Spotlight lookup. The testsuite creates
             # different binaries with the same UUID, because they only
             # differ in the debug info, which is not being hashed.
@@ -2396,6 +2393,7 @@ FileCheck output:
             result_summary=None,
             result_value=None,
             result_type=None,
+            error_msg=None,
             ):
         """
         Evaluates the given expression and verifies the result.
@@ -2403,6 +2401,7 @@ FileCheck output:
         :param result_summary: The summary that the expression should have. None if the summary should not be checked.
         :param result_value: The value that the expression should have. None if the value should not be checked.
         :param result_type: The type that the expression result should have. None if the type should not be checked.
+        :param error_msg: The error message the expression should return. None if the error output should not be checked.
         """
         self.assertTrue(expr.strip() == expr, "Expression contains trailing/leading whitespace: '" + expr + "'")
 
@@ -2417,6 +2416,11 @@ FileCheck output:
         options.SetLanguage(frame.GuessLanguage())
 
         eval_result = frame.EvaluateExpression(expr, options)
+
+        if error_msg:
+            self.assertFalse(eval_result.IsValid(), "Unexpected success with result: '" + str(eval_result) + "'")
+            self.assertEqual(error_msg, eval_result.GetError().GetCString())
+            return
 
         if not eval_result.GetError().Success():
             self.assertTrue(eval_result.GetError().Success(),

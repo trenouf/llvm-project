@@ -2867,10 +2867,10 @@ void SelectionDAGBuilder::visitCallBr(const CallBrInst &I) {
   Return->setInlineAsmBrDefaultTarget();
 
   // Update successor info.
-  addSuccessorWithProb(CallBrMBB, Return, BranchProbability::getOne());
+  addSuccessorWithProb(CallBrMBB, Return);
   for (unsigned i = 0, e = I.getNumIndirectDests(); i < e; ++i) {
     MachineBasicBlock *Target = FuncInfo.MBBMap[I.getIndirectDest(i)];
-    addSuccessorWithProb(CallBrMBB, Target, BranchProbability::getZero());
+    addSuccessorWithProb(CallBrMBB, Target);
     CallBrMBB->addInlineAsmBrIndirectTarget(Target);
   }
   CallBrMBB->normalizeSuccProbs();

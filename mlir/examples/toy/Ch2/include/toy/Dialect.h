@@ -16,7 +16,6 @@
 
 #include "mlir/IR/Dialect.h"
 #include "mlir/IR/Function.h"
-#include "mlir/Interfaces/SideEffects.h"
 
 namespace mlir {
 namespace toy {

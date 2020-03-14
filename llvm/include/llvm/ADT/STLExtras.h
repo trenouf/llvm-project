@@ -1520,45 +1520,33 @@ decltype(auto) apply_tuple(F &&f, Tuple &&t) {
 
 /// Return true if the sequence [Begin, End) has exactly N items. Runs in O(N)
 /// time. Not meant for use with random-access iterators.
-/// Can optionally take a predicate to filter lazily some items.
-template<typename IterTy,
-         typename Pred = bool (*)(const decltype(*std::declval<IterTy>()) &)>
+template <typename IterTy>
 bool hasNItems(
     IterTy &&Begin, IterTy &&End, unsigned N,
-    Pred &&ShouldBeCounted =
-        [](const decltype(*std::declval<IterTy>()) &) { return true; },
     std::enable_if_t<
         !std::is_same<typename std::iterator_traits<std::remove_reference_t<
                           decltype(Begin)>>::iterator_category,
                       std::random_access_iterator_tag>::value,
         void> * = nullptr) {
-  for (; N; ++Begin) {
+  for (; N; --N, ++Begin)
     if (Begin == End)
       return false; // Too few.
-    N -= ShouldBeCounted(*Begin);
-  }
   return Begin == End;
 }
 
 /// Return true if the sequence [Begin, End) has N or more items. Runs in O(N)
 /// time. Not meant for use with random-access iterators.
-/// Can optionally take a predicate to filter lazily some items.
-template<typename IterTy,
-         typename Pred = bool (*)(const decltype(*std::declval<IterTy>()) &)>
+template <typename IterTy>
 bool hasNItemsOrMore(
     IterTy &&Begin, IterTy &&End, unsigned N,
-    Pred &&ShouldBeCounted =
-        [](const decltype(*std::declval<IterTy>()) &) { return true; },
     std::enable_if_t<
         !std::is_same<typename std::iterator_traits<std::remove_reference_t<
                           decltype(Begin)>>::iterator_category,
                       std::random_access_iterator_tag>::value,
         void> * = nullptr) {
-  for (; N; ++Begin) {
+  for (; N; --N, ++Begin)
     if (Begin == End)
       return false; // Too few.
-    N -= ShouldBeCounted(*Begin);
-  }
   return true;
 }
 

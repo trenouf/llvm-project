@@ -513,36 +513,33 @@ define i32 @clear_highbits32_c4_commutative(i32 %val, i32 %numhighbits) nounwind
 define i64 @clear_highbits64_c0(i64 %val, i64 %numhighbits) nounwind {
 ; X86-FALLBACK0-LABEL: clear_highbits64_c0:
 ; X86-FALLBACK0:       # %bb.0:
-; X86-FALLBACK0-NEXT:    pushl %esi
 ; X86-FALLBACK0-NEXT:    movb {{[0-9]+}}(%esp), %cl
 ; X86-FALLBACK0-NEXT:    movl $-1, %eax
-; X86-FALLBACK0-NEXT:    movl $-1, %esi
-; X86-FALLBACK0-NEXT:    shrl %cl, %esi
-; X86-FALLBACK0-NEXT:    xorl %edx, %edx
+; X86-FALLBACK0-NEXT:    movl $-1, %edx
+; X86-FALLBACK0-NEXT:    shrl %cl, %edx
+; X86-FALLBACK0-NEXT:    shrdl %cl, %eax, %eax
 ; X86-FALLBACK0-NEXT:    testb $32, %cl
-; X86-FALLBACK0-NEXT:    jne .LBB13_1
-; X86-FALLBACK0-NEXT:  # %bb.2:
-; X86-FALLBACK0-NEXT:    movl %esi, %edx
-; X86-FALLBACK0-NEXT:    jmp .LBB13_3
-; X86-FALLBACK0-NEXT:  .LBB13_1:
-; X86-FALLBACK0-NEXT:    movl %esi, %eax
-; X86-FALLBACK0-NEXT:  .LBB13_3:
+; X86-FALLBACK0-NEXT:    je .LBB13_2
+; X86-FALLBACK0-NEXT:  # %bb.1:
+; X86-FALLBACK0-NEXT:    movl %edx, %eax
+; X86-FALLBACK0-NEXT:    xorl %edx, %edx
+; X86-FALLBACK0-NEXT:  .LBB13_2:
 ; X86-FALLBACK0-NEXT:    andl {{[0-9]+}}(%esp), %eax
 ; X86-FALLBACK0-NEXT:    andl {{[0-9]+}}(%esp), %edx
-; X86-FALLBACK0-NEXT:    popl %esi
 ; X86-FALLBACK0-NEXT:    retl
 ;
 ; X86-FALLBACK1-LABEL: clear_highbits64_c0:
 ; X86-FALLBACK1:       # %bb.0:
 ; X86-FALLBACK1-NEXT:    pushl %esi
 ; X86-FALLBACK1-NEXT:    movb {{[0-9]+}}(%esp), %cl
-; X86-FALLBACK1-NEXT:    movl $-1, %esi
 ; X86-FALLBACK1-NEXT:    movl $-1, %eax
-; X86-FALLBACK1-NEXT:    shrl %cl, %eax
+; X86-FALLBACK1-NEXT:    movl $-1, %esi
+; X86-FALLBACK1-NEXT:    shrl %cl, %esi
+; X86-FALLBACK1-NEXT:    shrdl %cl, %eax, %eax
 ; X86-FALLBACK1-NEXT:    xorl %edx, %edx
 ; X86-FALLBACK1-NEXT:    testb $32, %cl
-; X86-FALLBACK1-NEXT:    cmovel %eax, %edx
-; X86-FALLBACK1-NEXT:    cmovel %esi, %eax
+; X86-FALLBACK1-NEXT:    cmovnel %esi, %eax
+; X86-FALLBACK1-NEXT:    cmovel %esi, %edx
 ; X86-FALLBACK1-NEXT:    andl {{[0-9]+}}(%esp), %eax
 ; X86-FALLBACK1-NEXT:    andl {{[0-9]+}}(%esp), %edx
 ; X86-FALLBACK1-NEXT:    popl %esi
@@ -552,13 +549,14 @@ define i64 @clear_highbits64_c0(i64 %val, i64 %numhighbits) nounwind {
 ; X86-FALLBACK2:       # %bb.0:
 ; X86-FALLBACK2-NEXT:    pushl %esi
 ; X86-FALLBACK2-NEXT:    movb {{[0-9]+}}(%esp), %cl
-; X86-FALLBACK2-NEXT:    movl $-1, %esi
 ; X86-FALLBACK2-NEXT:    movl $-1, %eax
-; X86-FALLBACK2-NEXT:    shrl %cl, %eax
+; X86-FALLBACK2-NEXT:    movl $-1, %esi
+; X86-FALLBACK2-NEXT:    shrl %cl, %esi
+; X86-FALLBACK2-NEXT:    shrdl %cl, %eax, %eax
 ; X86-FALLBACK2-NEXT:    xorl %edx, %edx
 ; X86-FALLBACK2-NEXT:    testb $32, %cl
-; X86-FALLBACK2-NEXT:    cmovel %eax, %edx
-; X86-FALLBACK2-NEXT:    cmovel %esi, %eax
+; X86-FALLBACK2-NEXT:    cmovnel %esi, %eax
+; X86-FALLBACK2-NEXT:    cmovel %esi, %edx
 ; X86-FALLBACK2-NEXT:    andl {{[0-9]+}}(%esp), %eax
 ; X86-FALLBACK2-NEXT:    andl {{[0-9]+}}(%esp), %edx
 ; X86-FALLBACK2-NEXT:    popl %esi
@@ -570,10 +568,11 @@ define i64 @clear_highbits64_c0(i64 %val, i64 %numhighbits) nounwind {
 ; X86-BMI2-NEXT:    movb {{[0-9]+}}(%esp), %cl
 ; X86-BMI2-NEXT:    movl $-1, %eax
 ; X86-BMI2-NEXT:    shrxl %ecx, %eax, %esi
+; X86-BMI2-NEXT:    shrdl %cl, %eax, %eax
 ; X86-BMI2-NEXT:    xorl %edx, %edx
 ; X86-BMI2-NEXT:    testb $32, %cl
-; X86-BMI2-NEXT:    cmovel %esi, %edx
 ; X86-BMI2-NEXT:    cmovnel %esi, %eax
+; X86-BMI2-NEXT:    cmovel %esi, %edx
 ; X86-BMI2-NEXT:    andl {{[0-9]+}}(%esp), %eax
 ; X86-BMI2-NEXT:    andl {{[0-9]+}}(%esp), %edx
 ; X86-BMI2-NEXT:    popl %esi
@@ -601,36 +600,33 @@ define i64 @clear_highbits64_c0(i64 %val, i64 %numhighbits) nounwind {
 define i64 @clear_highbits64_c1_indexzext(i64 %val, i8 %numhighbits) nounwind {
 ; X86-FALLBACK0-LABEL: clear_highbits64_c1_indexzext:
 ; X86-FALLBACK0:       # %bb.0:
-; X86-FALLBACK0-NEXT:    pushl %esi
 ; X86-FALLBACK0-NEXT:    movb {{[0-9]+}}(%esp), %cl
 ; X86-FALLBACK0-NEXT:    movl $-1, %eax
-; X86-FALLBACK0-NEXT:    movl $-1, %esi
-; X86-FALLBACK0-NEXT:    shrl %cl, %esi
-; X86-FALLBACK0-NEXT:    xorl %edx, %edx
+; X86-FALLBACK0-NEXT:    movl $-1, %edx
+; X86-FALLBACK0-NEXT:    shrl %cl, %edx
+; X86-FALLBACK0-NEXT:    shrdl %cl, %eax, %eax
 ; X86-FALLBACK0-NEXT:    testb $32, %cl
-; X86-FALLBACK0-NEXT:    jne .LBB14_1
-; X86-FALLBACK0-NEXT:  # %bb.2:
-; X86-FALLBACK0-NEXT:    movl %esi, %edx
-; X86-FALLBACK0-NEXT:    jmp .LBB14_3
-; X86-FALLBACK0-NEXT:  .LBB14_1:
-; X86-FALLBACK0-NEXT:    movl %esi, %eax
-; X86-FALLBACK0-NEXT:  .LBB14_3:
+; X86-FALLBACK0-NEXT:    je .LBB14_2
+; X86-FALLBACK0-NEXT:  # %bb.1:
+; X86-FALLBACK0-NEXT:    movl %edx, %eax
+; X86-FALLBACK0-NEXT:    xorl %edx, %edx
+; X86-FALLBACK0-NEXT:  .LBB14_2:
 ; X86-FALLBACK0-NEXT:    andl {{[0-9]+}}(%esp), %eax
 ; X86-FALLBACK0-NEXT:    andl {{[0-9]+}}(%esp), %edx
-; X86-FALLBACK0-NEXT:    popl %esi
 ; X86-FALLBACK0-NEXT:    retl
 ;
 ; X86-FALLBACK1-LABEL: clear_highbits64_c1_indexzext:
 ; X86-FALLBACK1:       # %bb.0:
 ; X86-FALLBACK1-NEXT:    pushl %esi
 ; X86-FALLBACK1-NEXT:    movb {{[0-9]+}}(%esp), %cl
-; X86-FALLBACK1-NEXT:    movl $-1, %esi
 ; X86-FALLBACK1-NEXT:    movl $-1, %eax
-; X86-FALLBACK1-NEXT:    shrl %cl, %eax
+; X86-FALLBACK1-NEXT:    movl $-1, %esi
+; X86-FALLBACK1-NEXT:    shrl %cl, %esi
+; X86-FALLBACK1-NEXT:    shrdl %cl, %eax, %eax
 ; X86-FALLBACK1-NEXT:    xorl %edx, %edx
 ; X86-FALLBACK1-NEXT:    testb $32, %cl
-; X86-FALLBACK1-NEXT:    cmovel %eax, %edx
-; X86-FALLBACK1-NEXT:    cmovel %esi, %eax
+; X86-FALLBACK1-NEXT:    cmovnel %esi, %eax
+; X86-FALLBACK1-NEXT:    cmovel %esi, %edx
 ; X86-FALLBACK1-NEXT:    andl {{[0-9]+}}(%esp), %eax
 ; X86-FALLBACK1-NEXT:    andl {{[0-9]+}}(%esp), %edx
 ; X86-FALLBACK1-NEXT:    popl %esi
@@ -640,13 +636,14 @@ define i64 @clear_highbits64_c1_indexzext(i64 %val, i8 %numhighbits) nounwind {
 ; X86-FALLBACK2:       # %bb.0:
 ; X86-FALLBACK2-NEXT:    pushl %esi
 ; X86-FALLBACK2-NEXT:    movb {{[0-9]+}}(%esp), %cl
-; X86-FALLBACK2-NEXT:    movl $-1, %esi
 ; X86-FALLBACK2-NEXT:    movl $-1, %eax
-; X86-FALLBACK2-NEXT:    shrl %cl, %eax
+; X86-FALLBACK2-NEXT:    movl $-1, %esi
+; X86-FALLBACK2-NEXT:    shrl %cl, %esi
+; X86-FALLBACK2-NEXT:    shrdl %cl, %eax, %eax
 ; X86-FALLBACK2-NEXT:    xorl %edx, %edx
 ; X86-FALLBACK2-NEXT:    testb $32, %cl
-; X86-FALLBACK2-NEXT:    cmovel %eax, %edx
-; X86-FALLBACK2-NEXT:    cmovel %esi, %eax
+; X86-FALLBACK2-NEXT:    cmovnel %esi, %eax
+; X86-FALLBACK2-NEXT:    cmovel %esi, %edx
 ; X86-FALLBACK2-NEXT:    andl {{[0-9]+}}(%esp), %eax
 ; X86-FALLBACK2-NEXT:    andl {{[0-9]+}}(%esp), %edx
 ; X86-FALLBACK2-NEXT:    popl %esi
@@ -658,10 +655,11 @@ define i64 @clear_highbits64_c1_indexzext(i64 %val, i8 %numhighbits) nounwind {
 ; X86-BMI2-NEXT:    movb {{[0-9]+}}(%esp), %cl
 ; X86-BMI2-NEXT:    movl $-1, %eax
 ; X86-BMI2-NEXT:    shrxl %ecx, %eax, %esi
+; X86-BMI2-NEXT:    shrdl %cl, %eax, %eax
 ; X86-BMI2-NEXT:    xorl %edx, %edx
 ; X86-BMI2-NEXT:    testb $32, %cl
-; X86-BMI2-NEXT:    cmovel %esi, %edx
 ; X86-BMI2-NEXT:    cmovnel %esi, %eax
+; X86-BMI2-NEXT:    cmovel %esi, %edx
 ; X86-BMI2-NEXT:    andl {{[0-9]+}}(%esp), %eax
 ; X86-BMI2-NEXT:    andl {{[0-9]+}}(%esp), %edx
 ; X86-BMI2-NEXT:    popl %esi
@@ -691,26 +689,22 @@ define i64 @clear_highbits64_c1_indexzext(i64 %val, i8 %numhighbits) nounwind {
 define i64 @clear_highbits64_c2_load(i64* %w, i64 %numhighbits) nounwind {
 ; X86-FALLBACK0-LABEL: clear_highbits64_c2_load:
 ; X86-FALLBACK0:       # %bb.0:
-; X86-FALLBACK0-NEXT:    pushl %edi
 ; X86-FALLBACK0-NEXT:    pushl %esi
 ; X86-FALLBACK0-NEXT:    movl {{[0-9]+}}(%esp), %esi
 ; X86-FALLBACK0-NEXT:    movb {{[0-9]+}}(%esp), %cl
 ; X86-FALLBACK0-NEXT:    movl $-1, %eax
-; X86-FALLBACK0-NEXT:    movl $-1, %edi
-; X86-FALLBACK0-NEXT:    shrl %cl, %edi
-; X86-FALLBACK0-NEXT:    xorl %edx, %edx
+; X86-FALLBACK0-NEXT:    movl $-1, %edx
+; X86-FALLBACK0-NEXT:    shrl %cl, %edx
+; X86-FALLBACK0-NEXT:    shrdl %cl, %eax, %eax
 ; X86-FALLBACK0-NEXT:    testb $32, %cl
-; X86-FALLBACK0-NEXT:    jne .LBB15_1
-; X86-FALLBACK0-NEXT:  # %bb.2:
-; X86-FALLBACK0-NEXT:    movl %edi, %edx
-; X86-FALLBACK0-NEXT:    jmp .LBB15_3
-; X86-FALLBACK0-NEXT:  .LBB15_1:
-; X86-FALLBACK0-NEXT:    movl %edi, %eax
-; X86-FALLBACK0-NEXT:  .LBB15_3:
+; X86-FALLBACK0-NEXT:    je .LBB15_2
+; X86-FALLBACK0-NEXT:  # %bb.1:
+; X86-FALLBACK0-NEXT:    movl %edx, %eax
+; X86-FALLBACK0-NEXT:    xorl %edx, %edx
+; X86-FALLBACK0-NEXT:  .LBB15_2:
 ; X86-FALLBACK0-NEXT:    andl (%esi), %eax
 ; X86-FALLBACK0-NEXT:    andl 4(%esi), %edx
 ; X86-FALLBACK0-NEXT:    popl %esi
-; X86-FALLBACK0-NEXT:    popl %edi
 ; X86-FALLBACK0-NEXT:    retl
 ;
 ; X86-FALLBACK1-LABEL: clear_highbits64_c2_load:
@@ -719,13 +713,14 @@ define i64 @clear_highbits64_c2_load(i64* %w, i64 %numhighbits) nounwind {
 ; X86-FALLBACK1-NEXT:    pushl %esi
 ; X86-FALLBACK1-NEXT:    movl {{[0-9]+}}(%esp), %esi
 ; X86-FALLBACK1-NEXT:    movb {{[0-9]+}}(%esp), %cl
-; X86-FALLBACK1-NEXT:    movl $-1, %edi
 ; X86-FALLBACK1-NEXT:    movl $-1, %eax
-; X86-FALLBACK1-NEXT:    shrl %cl, %eax
+; X86-FALLBACK1-NEXT:    movl $-1, %edi
+; X86-FALLBACK1-NEXT:    shrl %cl, %edi
+; X86-FALLBACK1-NEXT:    shrdl %cl, %eax, %eax
 ; X86-FALLBACK1-NEXT:    xorl %edx, %edx
 ; X86-FALLBACK1-NEXT:    testb $32, %cl
-; X86-FALLBACK1-NEXT:    cmovel %eax, %edx
-; X86-FALLBACK1-NEXT:    cmovel %edi, %eax
+; X86-FALLBACK1-NEXT:    cmovnel %edi, %eax
+; X86-FALLBACK1-NEXT:    cmovel %edi, %edx
 ; X86-FALLBACK1-NEXT:    andl (%esi), %eax
 ; X86-FALLBACK1-NEXT:    andl 4(%esi), %edx
 ; X86-FALLBACK1-NEXT:    popl %esi
@@ -738,13 +733,14 @@ define i64 @clear_highbits64_c2_load(i64* %w, i64 %numhighbits) nounwind {
 ; X86-FALLBACK2-NEXT:    pushl %esi
 ; X86-FALLBACK2-NEXT:    movl {{[0-9]+}}(%esp), %esi
 ; X86-FALLBACK2-NEXT:    movb {{[0-9]+}}(%esp), %cl
-; X86-FALLBACK2-NEXT:    movl $-1, %edi
 ; X86-FALLBACK2-NEXT:    movl $-1, %eax
-; X86-FALLBACK2-NEXT:    shrl %cl, %eax
+; X86-FALLBACK2-NEXT:    movl $-1, %edi
+; X86-FALLBACK2-NEXT:    shrl %cl, %edi
+; X86-FALLBACK2-NEXT:    shrdl %cl, %eax, %eax
 ; X86-FALLBACK2-NEXT:    xorl %edx, %edx
 ; X86-FALLBACK2-NEXT:    testb $32, %cl
-; X86-FALLBACK2-NEXT:    cmovel %eax, %edx
-; X86-FALLBACK2-NEXT:    cmovel %edi, %eax
+; X86-FALLBACK2-NEXT:    cmovnel %edi, %eax
+; X86-FALLBACK2-NEXT:    cmovel %edi, %edx
 ; X86-FALLBACK2-NEXT:    andl (%esi), %eax
 ; X86-FALLBACK2-NEXT:    andl 4(%esi), %edx
 ; X86-FALLBACK2-NEXT:    popl %esi
@@ -753,20 +749,21 @@ define i64 @clear_highbits64_c2_load(i64* %w, i64 %numhighbits) nounwind {
 ;
 ; X86-BMI2-LABEL: clear_highbits64_c2_load:
 ; X86-BMI2:       # %bb.0:
-; X86-BMI2-NEXT:    pushl %ebx
+; X86-BMI2-NEXT:    pushl %edi
 ; X86-BMI2-NEXT:    pushl %esi
-; X86-BMI2-NEXT:    movl {{[0-9]+}}(%esp), %ecx
-; X86-BMI2-NEXT:    movb {{[0-9]+}}(%esp), %bl
+; X86-BMI2-NEXT:    movl {{[0-9]+}}(%esp), %esi
+; X86-BMI2-NEXT:    movb {{[0-9]+}}(%esp), %cl
 ; X86-BMI2-NEXT:    movl $-1, %eax
-; X86-BMI2-NEXT:    shrxl %ebx, %eax, %esi
+; X86-BMI2-NEXT:    shrxl %ecx, %eax, %edi
+; X86-BMI2-NEXT:    shrdl %cl, %eax, %eax
 ; X86-BMI2-NEXT:    xorl %edx, %edx
-; X86-BMI2-NEXT:    testb $32, %bl
-; X86-BMI2-NEXT:    cmovel %esi, %edx
-; X86-BMI2-NEXT:    cmovnel %esi, %eax
-; X86-BMI2-NEXT:    andl (%ecx), %eax
-; X86-BMI2-NEXT:    andl 4(%ecx), %edx
+; X86-BMI2-NEXT:    testb $32, %cl
+; X86-BMI2-NEXT:    cmovnel %edi, %eax
+; X86-BMI2-NEXT:    cmovel %edi, %edx
+; X86-BMI2-NEXT:    andl (%esi), %eax
+; X86-BMI2-NEXT:    andl 4(%esi), %edx
 ; X86-BMI2-NEXT:    popl %esi
-; X86-BMI2-NEXT:    popl %ebx
+; X86-BMI2-NEXT:    popl %edi
 ; X86-BMI2-NEXT:    retl
 ;
 ; X64-NOBMI2-LABEL: clear_highbits64_c2_load:
@@ -792,26 +789,22 @@ define i64 @clear_highbits64_c2_load(i64* %w, i64 %numhighbits) nounwind {
 define i64 @clear_highbits64_c3_load_indexzext(i64* %w, i8 %numhighbits) nounwind {
 ; X86-FALLBACK0-LABEL: clear_highbits64_c3_load_indexzext:
 ; X86-FALLBACK0:       # %bb.0:
-; X86-FALLBACK0-NEXT:    pushl %edi
 ; X86-FALLBACK0-NEXT:    pushl %esi
 ; X86-FALLBACK0-NEXT:    movl {{[0-9]+}}(%esp), %esi
 ; X86-FALLBACK0-NEXT:    movb {{[0-9]+}}(%esp), %cl
 ; X86-FALLBACK0-NEXT:    movl $-1, %eax
-; X86-FALLBACK0-NEXT:    movl $-1, %edi
-; X86-FALLBACK0-NEXT:    shrl %cl, %edi
-; X86-FALLBACK0-NEXT:    xorl %edx, %edx
+; X86-FALLBACK0-NEXT:    movl $-1, %edx
+; X86-FALLBACK0-NEXT:    shrl %cl, %edx
+; X86-FALLBACK0-NEXT:    shrdl %cl, %eax, %eax
 ; X86-FALLBACK0-NEXT:    testb $32, %cl
-; X86-FALLBACK0-NEXT:    jne .LBB16_1
-; X86-FALLBACK0-NEXT:  # %bb.2:
-; X86-FALLBACK0-NEXT:    movl %edi, %edx
-; X86-FALLBACK0-NEXT:    jmp .LBB16_3
-; X86-FALLBACK0-NEXT:  .LBB16_1:
-; X86-FALLBACK0-NEXT:    movl %edi, %eax
-; X86-FALLBACK0-NEXT:  .LBB16_3:
+; X86-FALLBACK0-NEXT:    je .LBB16_2
+; X86-FALLBACK0-NEXT:  # %bb.1:
+; X86-FALLBACK0-NEXT:    movl %edx, %eax
+; X86-FALLBACK0-NEXT:    xorl %edx, %edx
+; X86-FALLBACK0-NEXT:  .LBB16_2:
 ; X86-FALLBACK0-NEXT:    andl (%esi), %eax
 ; X86-FALLBACK0-NEXT:    andl 4(%esi), %edx
 ; X86-FALLBACK0-NEXT:    popl %esi
-; X86-FALLBACK0-NEXT:    popl %edi
 ; X86-FALLBACK0-NEXT:    retl
 ;
 ; X86-FALLBACK1-LABEL: clear_highbits64_c3_load_indexzext:
@@ -820,13 +813,14 @@ define i64 @clear_highbits64_c3_load_indexzext(i64* %w, i8 %numhighbits) nounwin
 ; X86-FALLBACK1-NEXT:    pushl %esi
 ; X86-FALLBACK1-NEXT:    movl {{[0-9]+}}(%esp), %esi
 ; X86-FALLBACK1-NEXT:    movb {{[0-9]+}}(%esp), %cl
-; X86-FALLBACK1-NEXT:    movl $-1, %edi
 ; X86-FALLBACK1-NEXT:    movl $-1, %eax
-; X86-FALLBACK1-NEXT:    shrl %cl, %eax
+; X86-FALLBACK1-NEXT:    movl $-1, %edi
+; X86-FALLBACK1-NEXT:    shrl %cl, %edi
+; X86-FALLBACK1-NEXT:    shrdl %cl, %eax, %eax
 ; X86-FALLBACK1-NEXT:    xorl %edx, %edx
 ; X86-FALLBACK1-NEXT:    testb $32, %cl
-; X86-FALLBACK1-NEXT:    cmovel %eax, %edx
-; X86-FALLBACK1-NEXT:    cmovel %edi, %eax
+; X86-FALLBACK1-NEXT:    cmovnel %edi, %eax
+; X86-FALLBACK1-NEXT:    cmovel %edi, %edx
 ; X86-FALLBACK1-NEXT:    andl (%esi), %eax
 ; X86-FALLBACK1-NEXT:    andl 4(%esi), %edx
 ; X86-FALLBACK1-NEXT:    popl %esi
@@ -839,13 +833,14 @@ define i64 @clear_highbits64_c3_load_indexzext(i64* %w, i8 %numhighbits) nounwin
 ; X86-FALLBACK2-NEXT:    pushl %esi
 ; X86-FALLBACK2-NEXT:    movl {{[0-9]+}}(%esp), %esi
 ; X86-FALLBACK2-NEXT:    movb {{[0-9]+}}(%esp), %cl
-; X86-FALLBACK2-NEXT:    movl $-1, %edi
 ; X86-FALLBACK2-NEXT:    movl $-1, %eax
-; X86-FALLBACK2-NEXT:    shrl %cl, %eax
+; X86-FALLBACK2-NEXT:    movl $-1, %edi
+; X86-FALLBACK2-NEXT:    shrl %cl, %edi
+; X86-FALLBACK2-NEXT:    shrdl %cl, %eax, %eax
 ; X86-FALLBACK2-NEXT:    xorl %edx, %edx
 ; X86-FALLBACK2-NEXT:    testb $32, %cl
-; X86-FALLBACK2-NEXT:    cmovel %eax, %edx
-; X86-FALLBACK2-NEXT:    cmovel %edi, %eax
+; X86-FALLBACK2-NEXT:    cmovnel %edi, %eax
+; X86-FALLBACK2-NEXT:    cmovel %edi, %edx
 ; X86-FALLBACK2-NEXT:    andl (%esi), %eax
 ; X86-FALLBACK2-NEXT:    andl 4(%esi), %edx
 ; X86-FALLBACK2-NEXT:    popl %esi
@@ -854,20 +849,21 @@ define i64 @clear_highbits64_c3_load_indexzext(i64* %w, i8 %numhighbits) nounwin
 ;
 ; X86-BMI2-LABEL: clear_highbits64_c3_load_indexzext:
 ; X86-BMI2:       # %bb.0:
-; X86-BMI2-NEXT:    pushl %ebx
+; X86-BMI2-NEXT:    pushl %edi
 ; X86-BMI2-NEXT:    pushl %esi
-; X86-BMI2-NEXT:    movl {{[0-9]+}}(%esp), %ecx
-; X86-BMI2-NEXT:    movb {{[0-9]+}}(%esp), %bl
+; X86-BMI2-NEXT:    movl {{[0-9]+}}(%esp), %esi
+; X86-BMI2-NEXT:    movb {{[0-9]+}}(%esp), %cl
 ; X86-BMI2-NEXT:    movl $-1, %eax
-; X86-BMI2-NEXT:    shrxl %ebx, %eax, %esi
+; X86-BMI2-NEXT:    shrxl %ecx, %eax, %edi
+; X86-BMI2-NEXT:    shrdl %cl, %eax, %eax
 ; X86-BMI2-NEXT:    xorl %edx, %edx
-; X86-BMI2-NEXT:    testb $32, %bl
-; X86-BMI2-NEXT:    cmovel %esi, %edx
-; X86-BMI2-NEXT:    cmovnel %esi, %eax
-; X86-BMI2-NEXT:    andl (%ecx), %eax
-; X86-BMI2-NEXT:    andl 4(%ecx), %edx
+; X86-BMI2-NEXT:    testb $32, %cl
+; X86-BMI2-NEXT:    cmovnel %edi, %eax
+; X86-BMI2-NEXT:    cmovel %edi, %edx
+; X86-BMI2-NEXT:    andl (%esi), %eax
+; X86-BMI2-NEXT:    andl 4(%esi), %edx
 ; X86-BMI2-NEXT:    popl %esi
-; X86-BMI2-NEXT:    popl %ebx
+; X86-BMI2-NEXT:    popl %edi
 ; X86-BMI2-NEXT:    retl
 ;
 ; X64-NOBMI2-LABEL: clear_highbits64_c3_load_indexzext:
@@ -895,36 +891,33 @@ define i64 @clear_highbits64_c3_load_indexzext(i64* %w, i8 %numhighbits) nounwin
 define i64 @clear_highbits64_c4_commutative(i64 %val, i64 %numhighbits) nounwind {
 ; X86-FALLBACK0-LABEL: clear_highbits64_c4_commutative:
 ; X86-FALLBACK0:       # %bb.0:
-; X86-FALLBACK0-NEXT:    pushl %esi
 ; X86-FALLBACK0-NEXT:    movb {{[0-9]+}}(%esp), %cl
 ; X86-FALLBACK0-NEXT:    movl $-1, %eax
-; X86-FALLBACK0-NEXT:    movl $-1, %esi
-; X86-FALLBACK0-NEXT:    shrl %cl, %esi
-; X86-FALLBACK0-NEXT:    xorl %edx, %edx
+; X86-FALLBACK0-NEXT:    movl $-1, %edx
+; X86-FALLBACK0-NEXT:    shrl %cl, %edx
+; X86-FALLBACK0-NEXT:    shrdl %cl, %eax, %eax
 ; X86-FALLBACK0-NEXT:    testb $32, %cl
-; X86-FALLBACK0-NEXT:    jne .LBB17_1
-; X86-FALLBACK0-NEXT:  # %bb.2:
-; X86-FALLBACK0-NEXT:    movl %esi, %edx
-; X86-FALLBACK0-NEXT:    jmp .LBB17_3
-; X86-FALLBACK0-NEXT:  .LBB17_1:
-; X86-FALLBACK0-NEXT:    movl %esi, %eax
-; X86-FALLBACK0-NEXT:  .LBB17_3:
+; X86-FALLBACK0-NEXT:    je .LBB17_2
+; X86-FALLBACK0-NEXT:  # %bb.1:
+; X86-FALLBACK0-NEXT:    movl %edx, %eax
+; X86-FALLBACK0-NEXT:    xorl %edx, %edx
+; X86-FALLBACK0-NEXT:  .LBB17_2:
 ; X86-FALLBACK0-NEXT:    andl {{[0-9]+}}(%esp), %eax
 ; X86-FALLBACK0-NEXT:    andl {{[0-9]+}}(%esp), %edx
-; X86-FALLBACK0-NEXT:    popl %esi
 ; X86-FALLBACK0-NEXT:    retl
 ;
 ; X86-FALLBACK1-LABEL: clear_highbits64_c4_commutative:
 ; X86-FALLBACK1:       # %bb.0:
 ; X86-FALLBACK1-NEXT:    pushl %esi
 ; X86-FALLBACK1-NEXT:    movb {{[0-9]+}}(%esp), %cl
-; X86-FALLBACK1-NEXT:    movl $-1, %esi
 ; X86-FALLBACK1-NEXT:    movl $-1, %eax
-; X86-FALLBACK1-NEXT:    shrl %cl, %eax
+; X86-FALLBACK1-NEXT:    movl $-1, %esi
+; X86-FALLBACK1-NEXT:    shrl %cl, %esi
+; X86-FALLBACK1-NEXT:    shrdl %cl, %eax, %eax
 ; X86-FALLBACK1-NEXT:    xorl %edx, %edx
 ; X86-FALLBACK1-NEXT:    testb $32, %cl
-; X86-FALLBACK1-NEXT:    cmovel %eax, %edx
-; X86-FALLBACK1-NEXT:    cmovel %esi, %eax
+; X86-FALLBACK1-NEXT:    cmovnel %esi, %eax
+; X86-FALLBACK1-NEXT:    cmovel %esi, %edx
 ; X86-FALLBACK1-NEXT:    andl {{[0-9]+}}(%esp), %eax
 ; X86-FALLBACK1-NEXT:    andl {{[0-9]+}}(%esp), %edx
 ; X86-FALLBACK1-NEXT:    popl %esi
@@ -934,13 +927,14 @@ define i64 @clear_highbits64_c4_commutative(i64 %val, i64 %numhighbits) nounwind
 ; X86-FALLBACK2:       # %bb.0:
 ; X86-FALLBACK2-NEXT:    pushl %esi
 ; X86-FALLBACK2-NEXT:    movb {{[0-9]+}}(%esp), %cl
-; X86-FALLBACK2-NEXT:    movl $-1, %esi
 ; X86-FALLBACK2-NEXT:    movl $-1, %eax
-; X86-FALLBACK2-NEXT:    shrl %cl, %eax
+; X86-FALLBACK2-NEXT:    movl $-1, %esi
+; X86-FALLBACK2-NEXT:    shrl %cl, %esi
+; X86-FALLBACK2-NEXT:    shrdl %cl, %eax, %eax
 ; X86-FALLBACK2-NEXT:    xorl %edx, %edx
 ; X86-FALLBACK2-NEXT:    testb $32, %cl
-; X86-FALLBACK2-NEXT:    cmovel %eax, %edx
-; X86-FALLBACK2-NEXT:    cmovel %esi, %eax
+; X86-FALLBACK2-NEXT:    cmovnel %esi, %eax
+; X86-FALLBACK2-NEXT:    cmovel %esi, %edx
 ; X86-FALLBACK2-NEXT:    andl {{[0-9]+}}(%esp), %eax
 ; X86-FALLBACK2-NEXT:    andl {{[0-9]+}}(%esp), %edx
 ; X86-FALLBACK2-NEXT:    popl %esi
@@ -952,10 +946,11 @@ define i64 @clear_highbits64_c4_commutative(i64 %val, i64 %numhighbits) nounwind
 ; X86-BMI2-NEXT:    movb {{[0-9]+}}(%esp), %cl
 ; X86-BMI2-NEXT:    movl $-1, %eax
 ; X86-BMI2-NEXT:    shrxl %ecx, %eax, %esi
+; X86-BMI2-NEXT:    shrdl %cl, %eax, %eax
 ; X86-BMI2-NEXT:    xorl %edx, %edx
 ; X86-BMI2-NEXT:    testb $32, %cl
-; X86-BMI2-NEXT:    cmovel %esi, %edx
 ; X86-BMI2-NEXT:    cmovnel %esi, %eax
+; X86-BMI2-NEXT:    cmovel %esi, %edx
 ; X86-BMI2-NEXT:    andl {{[0-9]+}}(%esp), %eax
 ; X86-BMI2-NEXT:    andl {{[0-9]+}}(%esp), %edx
 ; X86-BMI2-NEXT:    popl %esi
@@ -1069,6 +1064,7 @@ define i64 @oneuse64(i64 %val, i64 %numhighbits) nounwind {
 ; X86-FALLBACK0-NEXT:    movl $-1, %esi
 ; X86-FALLBACK0-NEXT:    movl $-1, %edi
 ; X86-FALLBACK0-NEXT:    shrl %cl, %edi
+; X86-FALLBACK0-NEXT:    shrdl %cl, %esi, %esi
 ; X86-FALLBACK0-NEXT:    testb $32, %cl
 ; X86-FALLBACK0-NEXT:    je .LBB19_2
 ; X86-FALLBACK0-NEXT:  # %bb.1:
@@ -1098,6 +1094,7 @@ define i64 @oneuse64(i64 %val, i64 %numhighbits) nounwind {
 ; X86-FALLBACK1-NEXT:    movl $-1, %esi
 ; X86-FALLBACK1-NEXT:    movl $-1, %eax
 ; X86-FALLBACK1-NEXT:    shrl %cl, %eax
+; X86-FALLBACK1-NEXT:    shrdl %cl, %esi, %esi
 ; X86-FALLBACK1-NEXT:    xorl %edi, %edi
 ; X86-FALLBACK1-NEXT:    testb $32, %cl
 ; X86-FALLBACK1-NEXT:    cmovnel %eax, %esi
@@ -1125,6 +1122,7 @@ define i64 @oneuse64(i64 %val, i64 %numhighbits) nounwind {
 ; X86-FALLBACK2-NEXT:    movl $-1, %esi
 ; X86-FALLBACK2-NEXT:    movl $-1, %eax
 ; X86-FALLBACK2-NEXT:    shrl %cl, %eax
+; X86-FALLBACK2-NEXT:    shrdl %cl, %esi, %esi
 ; X86-FALLBACK2-NEXT:    xorl %edi, %edi
 ; X86-FALLBACK2-NEXT:    testb $32, %cl
 ; X86-FALLBACK2-NEXT:    cmovnel %eax, %esi
@@ -1148,13 +1146,14 @@ define i64 @oneuse64(i64 %val, i64 %numhighbits) nounwind {
 ; X86-BMI2-NEXT:    pushl %edi
 ; X86-BMI2-NEXT:    pushl %esi
 ; X86-BMI2-NEXT:    pushl %eax
-; X86-BMI2-NEXT:    movb {{[0-9]+}}(%esp), %al
+; X86-BMI2-NEXT:    movb {{[0-9]+}}(%esp), %cl
 ; X86-BMI2-NEXT:    movl $-1, %esi
-; X86-BMI2-NEXT:    shrxl %eax, %esi, %ecx
+; X86-BMI2-NEXT:    shrxl %ecx, %esi, %eax
+; X86-BMI2-NEXT:    shrdl %cl, %esi, %esi
 ; X86-BMI2-NEXT:    xorl %edi, %edi
-; X86-BMI2-NEXT:    testb $32, %al
-; X86-BMI2-NEXT:    cmovnel %ecx, %esi
-; X86-BMI2-NEXT:    cmovel %ecx, %edi
+; X86-BMI2-NEXT:    testb $32, %cl
+; X86-BMI2-NEXT:    cmovnel %eax, %esi
+; X86-BMI2-NEXT:    cmovel %eax, %edi
 ; X86-BMI2-NEXT:    subl $8, %esp
 ; X86-BMI2-NEXT:    pushl %edi
 ; X86-BMI2-NEXT:    pushl %esi

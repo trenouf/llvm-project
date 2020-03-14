@@ -105,9 +105,12 @@ void StringFindStartswithCheck::check(const MatchFinder::MatchResult &Result) {
 
   // Create a preprocessor #include FixIt hint (CreateIncludeInsertion checks
   // whether this already exists).
-  Diagnostic << IncludeInserter->CreateIncludeInsertion(
+  auto IncludeHint = IncludeInserter->CreateIncludeInsertion(
       Source.getFileID(ComparisonExpr->getBeginLoc()), AbseilStringsMatchHeader,
       false);
+  if (IncludeHint) {
+    Diagnostic << *IncludeHint;
+  }
 }
 
 void StringFindStartswithCheck::registerPPCallbacks(

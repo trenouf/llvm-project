@@ -11,7 +11,6 @@
 #include "TestingSupport/TestUtilities.h"
 #include "lldb/Host/FileSystem.h"
 #include "lldb/lldb-defines.h"
-#include "llvm/Support/Host.h"
 #include "gtest/gtest.h"
 
 using namespace lldb_private;

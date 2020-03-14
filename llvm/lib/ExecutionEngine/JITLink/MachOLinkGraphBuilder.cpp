@@ -274,7 +274,7 @@ Error MachOLinkGraphBuilder::createNormalizedSymbols() {
 
     IndexToSymbol[SymbolIndex] =
         &createNormalizedSymbol(*Name, Value, Type, Sect, Desc,
-                                getLinkage(Desc), getScope(*Name, Type));
+                                getLinkage(Type), getScope(*Name, Type));
   }
 
   return Error::success();

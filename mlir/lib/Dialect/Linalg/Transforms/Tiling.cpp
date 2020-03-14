@@ -414,7 +414,7 @@ Optional<TiledLinalgOp> static tileLinalgOpImpl(OpBuilder &b, LinalgOp op,
 }
 
 template <typename LoopTy>
-static Optional<TiledLinalgOp>
+Optional<TiledLinalgOp>
 tileLinalgOpImpl(OpBuilder &b, LinalgOp op, ArrayRef<int64_t> tileSizes,
                  ArrayRef<unsigned> permutation, OperationFolder *folder) {
   assert(op.hasBufferSemantics() && "expected linalg op with buffer semantics");
@@ -491,7 +491,9 @@ static void tileLinalgOps(FuncOp f, ArrayRef<int64_t> tileSizes) {
       op.erase();
   });
   f.walk([](LinalgOp op) {
-    if (isOpTriviallyDead(op))
+    if (!op.getOperation()->hasNoSideEffect())
+      return;
+    if (op.getOperation()->use_empty())
       op.erase();
   });
 }

@@ -2190,6 +2190,15 @@ static bool shouldSwapCmpOperands(const Comparison &C) {
   return false;
 }
 
+// Return a version of comparison CC mask CCMask in which the LT and GT
+// actions are swapped.
+static unsigned reverseCCMask(unsigned CCMask) {
+  return ((CCMask & SystemZ::CCMASK_CMP_EQ) |
+          (CCMask & SystemZ::CCMASK_CMP_GT ? SystemZ::CCMASK_CMP_LT : 0) |
+          (CCMask & SystemZ::CCMASK_CMP_LT ? SystemZ::CCMASK_CMP_GT : 0) |
+          (CCMask & SystemZ::CCMASK_CMP_UO));
+}
+
 // Check whether C tests for equality between X and Y and whether X - Y
 // or Y - X is also computed.  In that case it's better to compare the
 // result of the subtraction against zero.
@@ -2225,7 +2234,7 @@ static void adjustForFNeg(Comparison &C) {
       SDNode *N = *I;
       if (N->getOpcode() == ISD::FNEG) {
         C.Op0 = SDValue(N, 0);
-        C.CCMask = SystemZ::reverseCCMask(C.CCMask);
+        C.CCMask = reverseCCMask(C.CCMask);
         return;
       }
     }
@@ -2592,7 +2601,7 @@ static Comparison getCmp(SelectionDAG &DAG, SDValue CmpOp0, SDValue CmpOp1,
 
   if (shouldSwapCmpOperands(C)) {
     std::swap(C.Op0, C.Op1);
-    C.CCMask = SystemZ::reverseCCMask(C.CCMask);
+    C.CCMask = reverseCCMask(C.CCMask);
   }
 
   adjustForTestUnderMask(DAG, DL, C);
@@ -6268,7 +6277,15 @@ static bool combineCCMask(SDValue &CCReg, int &CCValid, int &CCMask) {
       return false;
 
     // Compute the effective CC mask for the new branch or select.
-    CCMask = SystemZ::reverseCCMask(CCMask);
+    switch (CCMask) {
+    case SystemZ::CCMASK_CMP_EQ: break;
+    case SystemZ::CCMASK_CMP_NE: break;
+    case SystemZ::CCMASK_CMP_LT: CCMask = SystemZ::CCMASK_CMP_GT; break;
+    case SystemZ::CCMASK_CMP_GT: CCMask = SystemZ::CCMASK_CMP_LT; break;
+    case SystemZ::CCMASK_CMP_LE: CCMask = SystemZ::CCMASK_CMP_GE; break;
+    case SystemZ::CCMASK_CMP_GE: CCMask = SystemZ::CCMASK_CMP_LE; break;
+    default: return false;
+    }
 
     // Return the updated CCReg link.
     CCReg = IPM->getOperand(0);

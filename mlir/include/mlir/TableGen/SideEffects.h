@@ -27,7 +27,10 @@ public:
   StringRef getName() const;
 
   // Return the name of the base C++ effect.
-  StringRef getBaseEffectName() const;
+  StringRef getBaseName() const;
+
+  // Return the name of the parent interface trait.
+  StringRef getInterfaceTrait() const;
 
   // Return the name of the resource class.
   StringRef getResource() const;
@@ -42,9 +45,6 @@ class SideEffectTrait : public InterfaceOpTrait {
 public:
   // Return the effects that are attached to the side effect interface.
   Operator::var_decorator_range getEffects() const;
-
-  // Return the name of the base C++ effect.
-  StringRef getBaseEffectName() const;
 
   static bool classof(const OpTrait *t);
 };

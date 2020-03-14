@@ -16,7 +16,6 @@
 
 include "mlir/IR/OpBase.td"
 include "mlir/Dialect/QuantOps/QuantPredicates.td"
-include "mlir/Interfaces/SideEffects.td"
 
 def fxpmath_Dialect : Dialect {
   let name = "fxpmath";

@@ -9,7 +9,6 @@
 #include "llvm/IR/User.h"
 #include "llvm/IR/Constant.h"
 #include "llvm/IR/GlobalValue.h"
-#include "llvm/IR/IntrinsicInst.h"
 
 namespace llvm {
 class BasicBlock;
@@ -104,12 +103,6 @@ MutableArrayRef<uint8_t> User::getDescriptor() {
 
   return MutableArrayRef<uint8_t>(
       reinterpret_cast<uint8_t *>(DI) - DI->SizeInBytes, DI->SizeInBytes);
-}
-
-bool User::isDroppable() const {
-  if (const auto *Intr = dyn_cast<IntrinsicInst>(this))
-    return Intr->getIntrinsicID() == Intrinsic::assume;
-  return false;
 }
 
 //===----------------------------------------------------------------------===//

@@ -18,7 +18,6 @@
 #include "clang/Driver/Options.h"
 #include "llvm/Option/ArgList.h"
 #include "llvm/Support/FileSystem.h"
-#include "llvm/Support/Host.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/Process.h"
 #include "llvm/Support/Program.h"
@@ -34,28 +33,24 @@ using namespace llvm::opt;
 
 // Parses the contents of version.txt in an CUDA installation.  It should
 // contain one line of the from e.g. "CUDA Version 7.5.2".
-void CudaInstallationDetector::ParseCudaVersionFile(llvm::StringRef V) {
-  Version = CudaVersion::UNKNOWN;
+static CudaVersion ParseCudaVersionFile(const Driver &D, llvm::StringRef V) {
   if (!V.startswith("CUDA Version "))
-    return;
+    return CudaVersion::UNKNOWN;
   V = V.substr(strlen("CUDA Version "));
   SmallVector<StringRef,4> VersionParts;
   V.split(VersionParts, '.');
   if (VersionParts.size() < 2)
-    return;
-  DetectedVersion = join_items(".", VersionParts[0], VersionParts[1]);
-  Version = CudaStringToVersion(DetectedVersion);
+    return CudaVersion::UNKNOWN;
+  std::string MajorMinor = join_items(".", VersionParts[0], VersionParts[1]);
+  CudaVersion Version = CudaStringToVersion(MajorMinor);
   if (Version != CudaVersion::UNKNOWN)
-    return;
+    return Version;
 
-  Version = CudaVersion::LATEST;
-  DetectedVersionIsNotSupported = true;
-}
-
-void CudaInstallationDetector::WarnIfUnsupportedVersion() {
-  if (DetectedVersionIsNotSupported)
-    D.Diag(diag::warn_drv_unknown_cuda_version)
-        << DetectedVersion << CudaVersionToString(Version);
+  // Issue a warning and assume that the version we've found is compatible with
+  // the latest version we support.
+  D.Diag(diag::warn_drv_unknown_cuda_version)
+      << MajorMinor << CudaVersionToString(CudaVersion::LATEST);
+  return CudaVersion::LATEST;
 }
 
 CudaInstallationDetector::CudaInstallationDetector(
@@ -154,7 +149,7 @@ CudaInstallationDetector::CudaInstallationDetector(
       // version.txt isn't present.
       Version = CudaVersion::CUDA_70;
     } else {
-      ParseCudaVersionFile((*VersionFile)->getBuffer());
+      Version = ParseCudaVersionFile(D, (*VersionFile)->getBuffer());
     }
 
     if (Version >= CudaVersion::CUDA_90) {
@@ -572,10 +567,8 @@ CudaToolChain::CudaToolChain(const Driver &D, const llvm::Triple &Triple,
                              const Action::OffloadKind OK)
     : ToolChain(D, Triple, Args), HostTC(HostTC),
       CudaInstallation(D, HostTC.getTriple(), Args), OK(OK) {
-  if (CudaInstallation.isValid()) {
-    CudaInstallation.WarnIfUnsupportedVersion();
+  if (CudaInstallation.isValid())
     getProgramPaths().push_back(std::string(CudaInstallation.getBinPath()));
-  }
   // Lookup binaries into the driver directory, this is used to
   // discover the clang-offload-bundler executable.
   getProgramPaths().push_back(getDriver().Dir);

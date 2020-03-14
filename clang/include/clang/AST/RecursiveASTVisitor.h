@@ -1127,17 +1127,10 @@ DEF_TRAVERSE_TYPE(PipeType, { TRY_TO(TraverseType(T->getElementType())); })
 #define DEF_TRAVERSE_TYPELOC(TYPE, CODE)                                       \
   template <typename Derived>                                                  \
   bool RecursiveASTVisitor<Derived>::Traverse##TYPE##Loc(TYPE##Loc TL) {       \
-    if (!getDerived().shouldTraversePostOrder()) {                             \
-      TRY_TO(WalkUpFrom##TYPE##Loc(TL));                                       \
-      if (getDerived().shouldWalkTypesOfTypeLocs())                            \
-        TRY_TO(WalkUpFrom##TYPE(const_cast<TYPE *>(TL.getTypePtr())));         \
-    }                                                                          \
+    if (getDerived().shouldWalkTypesOfTypeLocs())                              \
+      TRY_TO(WalkUpFrom##TYPE(const_cast<TYPE *>(TL.getTypePtr())));           \
+    TRY_TO(WalkUpFrom##TYPE##Loc(TL));                                         \
     { CODE; }                                                                  \
-    if (getDerived().shouldTraversePostOrder()) {                              \
-      TRY_TO(WalkUpFrom##TYPE##Loc(TL));                                       \
-      if (getDerived().shouldWalkTypesOfTypeLocs())                            \
-        TRY_TO(WalkUpFrom##TYPE(const_cast<TYPE *>(TL.getTypePtr())));         \
-    }                                                                          \
     return true;                                                               \
   }
 
@@ -1206,22 +1199,22 @@ bool RecursiveASTVisitor<Derived>::TraverseArrayTypeLocHelper(ArrayTypeLoc TL) {
 
 DEF_TRAVERSE_TYPELOC(ConstantArrayType, {
   TRY_TO(TraverseTypeLoc(TL.getElementLoc()));
-  TRY_TO(TraverseArrayTypeLocHelper(TL));
+  return TraverseArrayTypeLocHelper(TL);
 })
 
 DEF_TRAVERSE_TYPELOC(IncompleteArrayType, {
   TRY_TO(TraverseTypeLoc(TL.getElementLoc()));
-  TRY_TO(TraverseArrayTypeLocHelper(TL));
+  return TraverseArrayTypeLocHelper(TL);
 })
 
 DEF_TRAVERSE_TYPELOC(VariableArrayType, {
   TRY_TO(TraverseTypeLoc(TL.getElementLoc()));
-  TRY_TO(TraverseArrayTypeLocHelper(TL));
+  return TraverseArrayTypeLocHelper(TL);
 })
 
 DEF_TRAVERSE_TYPELOC(DependentSizedArrayType, {
   TRY_TO(TraverseTypeLoc(TL.getElementLoc()));
-  TRY_TO(TraverseArrayTypeLocHelper(TL));
+  return TraverseArrayTypeLocHelper(TL);
 })
 
 DEF_TRAVERSE_TYPELOC(DependentAddressSpaceType, {

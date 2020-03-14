@@ -133,7 +133,7 @@ FileSpec Host::GetModuleFileSpecForHostAddress(const void *host_addr) {
 
 uint32_t Host::FindProcesses(const ProcessInstanceInfoMatch &match_info,
                              ProcessInstanceInfoList &process_infos) {
-  process_infos.clear();
+  process_infos.Clear();
 
   AutoHandle snapshot(CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0));
   if (!snapshot.IsValid())
@@ -156,10 +156,10 @@ uint32_t Host::FindProcesses(const ProcessInstanceInfoMatch &match_info,
       GetProcessExecutableAndTriple(handle, process);
 
       if (match_info.MatchAllProcesses() || match_info.Matches(process))
-        process_infos.push_back(process);
+        process_infos.Append(process);
     } while (Process32NextW(snapshot.get(), &pe));
   }
-  return process_infos.size();
+  return process_infos.GetSize();
 }
 
 bool Host::GetProcessInfo(lldb::pid_t pid, ProcessInstanceInfo &process_info) {

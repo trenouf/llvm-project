@@ -2,9 +2,6 @@
 add_entrypoint_library(
   llvmlibc
   DEPENDS
-    # assert.h entrypoints
-    __assert_fail
-
     # errno.h entrypoints
     __errno_location
 

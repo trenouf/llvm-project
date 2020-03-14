@@ -21,7 +21,6 @@
 #include "clang/AST/StmtOpenMP.h"
 #include "clang/AST/StmtVisitor.h"
 #include "clang/Basic/BitmaskEnum.h"
-#include "clang/Basic/FileManager.h"
 #include "clang/Basic/OpenMPKinds.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/CodeGen/ConstantInitBuilder.h"
@@ -2933,14 +2932,12 @@ bool CGOpenMPRuntime::emitDeclareTargetVarDefinition(const VarDecl *VD,
        HasRequiresUnifiedSharedMemory))
     return CGM.getLangOpts().OpenMPIsDevice;
   VD = VD->getDefinition(CGM.getContext());
-  assert(VD && "Unknown VarDecl");
-
-  if (!DeclareTargetWithDefinition.insert(CGM.getMangledName(VD)).second)
+  if (VD && !DeclareTargetWithDefinition.insert(CGM.getMangledName(VD)).second)
     return CGM.getLangOpts().OpenMPIsDevice;
 
   QualType ASTTy = VD->getType();
-  SourceLocation Loc = VD->getCanonicalDecl()->getBeginLoc();
 
+  SourceLocation Loc = VD->getCanonicalDecl()->getBeginLoc();
   // Produce the unique prefix to identify the new target regions. We use
   // the source location of the variable declaration which we know to not
   // conflict with any target region.

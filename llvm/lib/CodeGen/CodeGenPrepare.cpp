@@ -6565,23 +6565,19 @@ class VectorPromoteHelper {
         UseSplat = true;
     }
 
-    ElementCount EC = getTransitionType()->getVectorElementCount();
+    unsigned End = getTransitionType()->getVectorNumElements();
     if (UseSplat)
-      return ConstantVector::getSplat(EC, Val);
+      return ConstantVector::getSplat(End, Val);
 
-    if (!EC.Scalable) {
-      SmallVector<Constant *, 4> ConstVec;
-      UndefValue *UndefVal = UndefValue::get(Val->getType());
-      for (unsigned Idx = 0; Idx != EC.Min; ++Idx) {
-        if (Idx == ExtractIdx)
-          ConstVec.push_back(Val);
-        else
-          ConstVec.push_back(UndefVal);
-      }
-      return ConstantVector::get(ConstVec);
-    } else
-      llvm_unreachable(
-          "Generate scalable vector for non-splat is unimplemented");
+    SmallVector<Constant *, 4> ConstVec;
+    UndefValue *UndefVal = UndefValue::get(Val->getType());
+    for (unsigned Idx = 0; Idx != End; ++Idx) {
+      if (Idx == ExtractIdx)
+        ConstVec.push_back(Val);
+      else
+        ConstVec.push_back(UndefVal);
+    }
+    return ConstantVector::get(ConstVec);
   }
 
   /// Check if promoting to a vector type an operand at \p OperandIdx
@@ -7191,26 +7187,6 @@ bool CodeGenPrepare::optimizeInst(Instruction *I, bool &ModifiedDT) {
     }
     if (tryUnmergingGEPsAcrossIndirectBr(GEPI, TTI)) {
       return true;
-    }
-    return false;
-  }
-
-  if (FreezeInst *FI = dyn_cast<FreezeInst>(I)) {
-    // br(freeze(icmp a, const)) -> br(icmp (freeze a), const)
-    // This helps generate efficient conditional jumps.
-    if (ICmpInst *II = dyn_cast<ICmpInst>(FI->getOperand(0))) {
-      auto Op0 = II->getOperand(0), Op1 = II->getOperand(1);
-      bool Const0 = isa<ConstantInt>(Op0), Const1 = isa<ConstantInt>(Op1);
-      if (II->hasOneUse() && (Const0 || Const1)) {
-        if (!Const0 || !Const1) {
-          auto *F = new FreezeInst(Const0 ? Op1 : Op0, "", II);
-          F->takeName(FI);
-          II->setOperand(Const0 ? 1 : 0, F);
-        }
-        FI->replaceAllUsesWith(II);
-        FI->eraseFromParent();
-        return true;
-      }
     }
     return false;
   }

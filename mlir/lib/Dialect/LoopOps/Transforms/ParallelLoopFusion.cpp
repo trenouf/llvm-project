@@ -46,6 +46,13 @@ static bool equalIterationSpaces(ParallelOp firstPloop,
          matchOperands(firstPloop.step(), secondPloop.step());
 }
 
+/// Returns true if the defining operation for the memref is inside the body
+/// of parallel loop.
+bool isDefinedInPloopBody(Value memref, ParallelOp ploop) {
+  auto *memrefDef = memref.getDefiningOp();
+  return memrefDef && ploop.getOperation()->isAncestor(memrefDef);
+}
+
 /// Checks if the parallel loops have mixed access to the same buffers. Returns
 /// `true` if the first parallel loop writes to the same indices that the second
 /// loop reads.
@@ -132,13 +139,13 @@ static void fuseIfLegal(ParallelOp firstPloop, ParallelOp secondPloop,
 void mlir::loop::naivelyFuseParallelOps(Region &region) {
   OpBuilder b(region);
   // Consider every single block and attempt to fuse adjacent loops.
-  for (auto &block : region) {
+  for (auto &block : region.getBlocks()) {
     SmallVector<SmallVector<ParallelOp, 8>, 1> ploopChains{{}};
     // Not using `walk()` to traverse only top-level parallel loops and also
     // make sure that there are no side-effecting ops between the parallel
     // loops.
     bool noSideEffects = true;
-    for (auto &op : block) {
+    for (auto &op : block.getOperations()) {
       if (auto ploop = dyn_cast<ParallelOp>(op)) {
         if (noSideEffects) {
           ploopChains.back().push_back(ploop);
@@ -148,9 +155,7 @@ void mlir::loop::naivelyFuseParallelOps(Region &region) {
         }
         continue;
       }
-      // TODO: Handle region side effects properly.
-      noSideEffects &=
-          MemoryEffectOpInterface::hasNoEffect(&op) && op.getNumRegions() == 0;
+      noSideEffects &= op.hasNoSideEffect();
     }
     for (ArrayRef<ParallelOp> ploops : ploopChains) {
       for (int i = 0, e = ploops.size(); i + 1 < e; ++i)

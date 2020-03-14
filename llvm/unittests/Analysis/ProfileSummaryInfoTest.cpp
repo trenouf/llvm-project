@@ -240,11 +240,6 @@ TEST_F(ProfileSummaryInfoTest, InstrProf) {
   MDBuilder MDB(M->getContext());
   CI2->setMetadata(llvm::LLVMContext::MD_prof, MDB.createBranchWeights({400}));
   EXPECT_FALSE(PSI.isHotCallSite(CS2, &BFI));
-
-  EXPECT_TRUE(PSI.isFunctionHotInCallGraphNthPercentile(990000, F, BFI));
-  EXPECT_FALSE(PSI.isFunctionColdInCallGraphNthPercentile(990000, F, BFI));
-  EXPECT_FALSE(PSI.isFunctionHotInCallGraphNthPercentile(10000, F, BFI));
-  EXPECT_TRUE(PSI.isFunctionColdInCallGraphNthPercentile(10000, F, BFI));
 }
 
 TEST_F(ProfileSummaryInfoTest, InstrProfNoFuncEntryCount) {
@@ -270,9 +265,6 @@ TEST_F(ProfileSummaryInfoTest, InstrProfNoFuncEntryCount) {
   EXPECT_FALSE(PSI.isColdBlockNthPercentile(990000, BB1, &BFI));
   EXPECT_FALSE(PSI.isColdBlockNthPercentile(990000, BB2, &BFI));
   EXPECT_FALSE(PSI.isColdBlockNthPercentile(990000, BB3, &BFI));
-
-  EXPECT_FALSE(PSI.isFunctionHotInCallGraphNthPercentile(990000, F, BFI));
-  EXPECT_FALSE(PSI.isFunctionColdInCallGraphNthPercentile(990000, F, BFI));
 }
 
 TEST_F(ProfileSummaryInfoTest, SampleProf) {
@@ -340,10 +332,25 @@ TEST_F(ProfileSummaryInfoTest, SampleProf) {
   CI2->setMetadata(llvm::LLVMContext::MD_prof, MDB.createBranchWeights({400}));
   EXPECT_TRUE(PSI.isHotCallSite(CS2, &BFI));
 
-  EXPECT_TRUE(PSI.isFunctionHotInCallGraphNthPercentile(990000, F, BFI));
-  EXPECT_FALSE(PSI.isFunctionColdInCallGraphNthPercentile(990000, F, BFI));
-  EXPECT_FALSE(PSI.isFunctionHotInCallGraphNthPercentile(10000, F, BFI));
-  EXPECT_TRUE(PSI.isFunctionColdInCallGraphNthPercentile(10000, F, BFI));
+  {
+    Function *F = M->getFunction("l");
+    BlockFrequencyInfo BFI = buildBFI(*F);
+    BasicBlock &BB0 = F->getEntryBlock();
+    BasicBlock *BB1 = BB0.getTerminator()->getSuccessor(0);
+    BasicBlock *BB2 = BB0.getTerminator()->getSuccessor(1);
+    BasicBlock *BB3 = BB1->getSingleSuccessor();
+
+    // Without the entry count, all should return false.
+    EXPECT_FALSE(PSI.isHotBlockNthPercentile(990000, &BB0, &BFI));
+    EXPECT_FALSE(PSI.isHotBlockNthPercentile(990000, BB1, &BFI));
+    EXPECT_FALSE(PSI.isHotBlockNthPercentile(990000, BB2, &BFI));
+    EXPECT_FALSE(PSI.isHotBlockNthPercentile(990000, BB3, &BFI));
+
+    EXPECT_FALSE(PSI.isColdBlockNthPercentile(990000, &BB0, &BFI));
+    EXPECT_FALSE(PSI.isColdBlockNthPercentile(990000, BB1, &BFI));
+    EXPECT_FALSE(PSI.isColdBlockNthPercentile(990000, BB2, &BFI));
+    EXPECT_FALSE(PSI.isColdBlockNthPercentile(990000, BB3, &BFI));
+  }
 }
 
 TEST_F(ProfileSummaryInfoTest, SampleProfNoFuncEntryCount) {
@@ -369,9 +376,6 @@ TEST_F(ProfileSummaryInfoTest, SampleProfNoFuncEntryCount) {
   EXPECT_FALSE(PSI.isColdBlockNthPercentile(990000, BB1, &BFI));
   EXPECT_FALSE(PSI.isColdBlockNthPercentile(990000, BB2, &BFI));
   EXPECT_FALSE(PSI.isColdBlockNthPercentile(990000, BB3, &BFI));
-
-  EXPECT_FALSE(PSI.isFunctionHotInCallGraphNthPercentile(990000, F, BFI));
-  EXPECT_FALSE(PSI.isFunctionColdInCallGraphNthPercentile(990000, F, BFI));
 }
 
 } // end anonymous namespace

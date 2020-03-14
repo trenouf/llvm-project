@@ -101,11 +101,10 @@ public:
 
   int getIntrinsicInstrCost(Intrinsic::ID ID, Type *RetTy,
                             ArrayRef<Value *> Args, FastMathFlags FMF,
-                            unsigned VF = 1, const Instruction *I = nullptr);
-  int getIntrinsicInstrCost(Intrinsic::ID ID, Type *RetTy, ArrayRef<Type *> Tys,
-                            FastMathFlags FMF,
-                            unsigned ScalarizationCostPassed = UINT_MAX,
-                            const Instruction *I = nullptr);
+                            unsigned VF = 1);
+  int getIntrinsicInstrCost(Intrinsic::ID ID, Type *RetTy,
+                            ArrayRef<Type *> Tys, FastMathFlags FMF,
+                            unsigned ScalarizationCostPassed = UINT_MAX);
   /// @}
 };
 

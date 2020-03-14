@@ -10,8 +10,9 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "mlir/Dialect/StandardOps/IR/Ops.h"
+#include "mlir/IR/Builders.h"
 #include "mlir/IR/PatternMatch.h"
-#include "mlir/Interfaces/SideEffects.h"
 #include "mlir/Transforms/FoldUtils.h"
 #include "mlir/Transforms/RegionUtils.h"
 #include "llvm/ADT/DenseMap.h"
@@ -161,8 +162,10 @@ bool GreedyPatternRewriteDriver::simplify(MutableArrayRef<Region> regions,
       if (op == nullptr)
         continue;
 
-      // If the operation is trivially dead - remove it.
-      if (isOpTriviallyDead(op)) {
+      // If the operation has no side effects, and no users, then it is
+      // trivially dead - remove it.
+      if (op->hasNoSideEffect() && op->use_empty()) {
+        // Be careful to update bookkeeping.
         notifyOperationRemoved(op);
         op->erase();
         continue;
@@ -200,10 +203,7 @@ bool GreedyPatternRewriteDriver::simplify(MutableArrayRef<Region> regions,
 
     // After applying patterns, make sure that the CFG of each of the regions is
     // kept up to date.
-    if (succeeded(simplifyRegions(regions))) {
-      folder.clear();
-      changed = true;
-    }
+    changed |= succeeded(simplifyRegions(regions));
   } while (changed && ++i < maxIterations);
   // Whether the rewrite converges, i.e. wasn't changed in the last iteration.
   return !changed;

@@ -99,8 +99,14 @@ protected:
 
     /// The statement class.
     unsigned sClass : 8;
+
+    /// This bit is set only for the Stmts that are the structured-block of
+    /// OpenMP executable directives. Directives that have a structured block
+    /// are called "non-standalone" directives.
+    /// I.e. those returned by OMPExecutableDirective::getStructuredBlock().
+    unsigned IsOMPStructuredBlock : 1;
   };
-  enum { NumStmtBits = 8 };
+  enum { NumStmtBits = 9 };
 
   class NullStmtBitfields {
     friend class ASTStmtReader;
@@ -583,18 +589,6 @@ protected:
     unsigned Kind : 2;
   };
 
-  class StmtExprBitfields {
-    friend class ASTStmtReader;
-    friend class StmtExpr;
-
-    unsigned : NumExprBits;
-
-    /// The number of levels of template parameters enclosing this statement
-    /// expression. Used to determine if a statement expression remains
-    /// dependent after instantiation.
-    unsigned TemplateDepth;
-  };
-
   //===--- C++ Expression bitfields classes ---===//
 
   class CXXOperatorCallExprBitfields {
@@ -1003,9 +997,6 @@ protected:
     PseudoObjectExprBitfields PseudoObjectExprBits;
     SourceLocExprBitfields SourceLocExprBits;
 
-    // GNU Extensions.
-    StmtExprBitfields StmtExprBits;
-
     // C++ Expressions
     CXXOperatorCallExprBitfields CXXOperatorCallExprBits;
     CXXRewrittenBinaryOperatorBitfields CXXRewrittenBinaryOperatorBits;
@@ -1112,6 +1103,7 @@ public:
     static_assert(sizeof(*this) % alignof(void *) == 0,
                   "Insufficient alignment!");
     StmtBits.sClass = SC;
+    StmtBits.IsOMPStructuredBlock = false;
     if (StatisticsEnabled) Stmt::addStmtClass(SC);
   }
 
@@ -1120,6 +1112,11 @@ public:
   }
 
   const char *getStmtClassName() const;
+
+  bool isOMPStructuredBlock() const { return StmtBits.IsOMPStructuredBlock; }
+  void setIsOMPStructuredBlock(bool IsOMPStructuredBlock) {
+    StmtBits.IsOMPStructuredBlock = IsOMPStructuredBlock;
+  }
 
   /// SourceLocation tokens are not useful in isolation - they are low level
   /// value objects created/interpreted by SourceManager. We assume AST

@@ -3969,15 +3969,14 @@ bool Sema::CheckUnaryExprOrTypeTraitOperand(Expr *E,
   // be complete (and will attempt to complete it if it's an array of unknown
   // bound).
   if (ExprKind == UETT_AlignOf || ExprKind == UETT_PreferredAlignOf) {
-    if (RequireCompleteSizedType(
-            E->getExprLoc(), Context.getBaseElementType(E->getType()),
-            diag::err_sizeof_alignof_incomplete_or_sizeless_type, ExprKind,
-            E->getSourceRange()))
+    if (RequireCompleteType(E->getExprLoc(),
+                            Context.getBaseElementType(E->getType()),
+                            diag::err_sizeof_alignof_incomplete_type, ExprKind,
+                            E->getSourceRange()))
       return true;
   } else {
-    if (RequireCompleteSizedExprType(
-            E, diag::err_sizeof_alignof_incomplete_or_sizeless_type, ExprKind,
-            E->getSourceRange()))
+    if (RequireCompleteExprType(E, diag::err_sizeof_alignof_incomplete_type,
+                                ExprKind, E->getSourceRange()))
       return true;
   }
 
@@ -4074,9 +4073,9 @@ bool Sema::CheckUnaryExprOrTypeTraitOperand(QualType ExprType,
                                       ExprKind))
     return false;
 
-  if (RequireCompleteSizedType(
-          OpLoc, ExprType, diag::err_sizeof_alignof_incomplete_or_sizeless_type,
-          ExprKind, ExprRange))
+  if (RequireCompleteType(OpLoc, ExprType,
+                          diag::err_sizeof_alignof_incomplete_type,
+                          ExprKind, ExprRange))
     return true;
 
   if (ExprType->isFunctionType()) {
@@ -6252,23 +6251,13 @@ Sema::BuildCompoundLiteralExpr(SourceLocation LParenLoc, TypeSourceInfo *TInfo,
     return ExprError();
   }
 
-  if (!isFileScope && !getLangOpts().CPlusPlus) {
-    // Compound literals that have automatic storage duration are destroyed at
-    // the end of the scope in C; in C++, they're just temporaries.
-
-    // Emit diagnostics if it is or contains a C union type that is non-trivial
-    // to destruct.
+  // Compound literals that have automatic storage duration are destroyed at
+  // the end of the scope. Emit diagnostics if it is or contains a C union type
+  // that is non-trivial to destruct.
+  if (!isFileScope)
     if (E->getType().hasNonTrivialToPrimitiveDestructCUnion())
       checkNonTrivialCUnion(E->getType(), E->getExprLoc(),
                             NTCUC_CompoundLiteral, NTCUK_Destruct);
-
-    // Diagnose jumps that enter or exit the lifetime of the compound literal.
-    if (literalType.isDestructedType()) {
-      Cleanup.setExprNeedsCleanups(true);
-      ExprCleanupObjects.push_back(E);
-      getCurFunction()->setHasBranchProtectedScope();
-    }
-  }
 
   if (E->getType().hasNonTrivialToPrimitiveDefaultInitializeCUnion() ||
       E->getType().hasNonTrivialToPrimitiveCopyCUnion())
@@ -13922,13 +13911,9 @@ void Sema::ActOnStmtExprError() {
   PopExpressionEvaluationContext();
 }
 
-ExprResult Sema::ActOnStmtExpr(Scope *S, SourceLocation LPLoc, Stmt *SubStmt,
-                               SourceLocation RPLoc) {
-  return BuildStmtExpr(LPLoc, SubStmt, RPLoc, getTemplateDepth(S));
-}
-
-ExprResult Sema::BuildStmtExpr(SourceLocation LPLoc, Stmt *SubStmt,
-                               SourceLocation RPLoc, unsigned TemplateDepth) {
+ExprResult
+Sema::ActOnStmtExpr(SourceLocation LPLoc, Stmt *SubStmt,
+                    SourceLocation RPLoc) { // "({..})"
   assert(SubStmt && isa<CompoundStmt>(SubStmt) && "Invalid action invocation!");
   CompoundStmt *Compound = cast<CompoundStmt>(SubStmt);
 
@@ -13959,8 +13944,7 @@ ExprResult Sema::BuildStmtExpr(SourceLocation LPLoc, Stmt *SubStmt,
 
   // FIXME: Check that expression type is complete/non-abstract; statement
   // expressions are not lvalues.
-  Expr *ResStmtExpr =
-      new (Context) StmtExpr(Compound, Ty, LPLoc, RPLoc, TemplateDepth);
+  Expr *ResStmtExpr = new (Context) StmtExpr(Compound, Ty, LPLoc, RPLoc);
   if (StmtExprMayBindToTemp)
     return MaybeBindToTemporary(ResStmtExpr);
   return ResStmtExpr;

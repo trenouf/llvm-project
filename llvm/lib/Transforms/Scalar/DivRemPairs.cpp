@@ -71,7 +71,6 @@ static llvm::Optional<ExpandedMatch> matchExpandedRem(Instruction &I) {
   return M;
 }
 
-namespace {
 /// A thin wrapper to store two values that we matched as div-rem pair.
 /// We want this extra indirection to avoid dealing with RAUW'ing the map keys.
 struct DivRemPairWorklistEntry {
@@ -112,7 +111,6 @@ struct DivRemPairWorklistEntry {
     }
   }
 };
-} // namespace
 using DivRemWorklistTy = SmallVector<DivRemPairWorklistEntry, 4>;
 
 /// Find matching pairs of integer div/rem ops (they have the same numerator,

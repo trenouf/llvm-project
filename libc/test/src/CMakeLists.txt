@@ -1,4 +1,3 @@
-add_subdirectory(assert)
 add_subdirectory(errno)
 add_subdirectory(signal)
 add_subdirectory(stdlib)

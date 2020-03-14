@@ -7,12 +7,11 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Transforms/RegionUtils.h"
+#include "mlir/Analysis/ControlFlowInterfaces.h"
 #include "mlir/IR/Block.h"
 #include "mlir/IR/Operation.h"
 #include "mlir/IR/RegionGraphTraits.h"
 #include "mlir/IR/Value.h"
-#include "mlir/Interfaces/ControlFlowInterfaces.h"
-#include "mlir/Interfaces/SideEffects.h"
 
 #include "llvm/ADT/DepthFirstIterator.h"
 #include "llvm/ADT/PostOrderIterator.h"
@@ -197,8 +196,9 @@ static bool isOpIntrinsicallyLive(Operation *op) {
   if (!op->isKnownNonTerminator())
     return true;
   // If the op has a side effect, we treat it as live.
-  // TODO: Properly handle region side effects.
-  return !MemoryEffectOpInterface::hasNoEffect(op) || op->getNumRegions() != 0;
+  if (!op->hasNoSideEffect())
+    return true;
+  return false;
 }
 
 static void propagateLiveness(Region &region, LiveMap &liveMap);

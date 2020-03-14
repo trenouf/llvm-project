@@ -974,12 +974,11 @@ void mlir::getSequentialLoops(AffineForOp forOp,
 bool mlir::isLoopParallel(AffineForOp forOp) {
   // Collect all load and store ops in loop nest rooted at 'forOp'.
   SmallVector<Operation *, 8> loadAndStoreOpInsts;
-  auto walkResult = forOp.walk([&](Operation *opInst) -> WalkResult {
+  auto walkResult = forOp.walk([&](Operation *opInst) {
     if (isa<AffineLoadOp>(opInst) || isa<AffineStoreOp>(opInst))
       loadAndStoreOpInsts.push_back(opInst);
     else if (!isa<AffineForOp>(opInst) && !isa<AffineTerminatorOp>(opInst) &&
-             !isa<AffineIfOp>(opInst) &&
-             !MemoryEffectOpInterface::hasNoEffect(opInst))
+             !isa<AffineIfOp>(opInst) && !opInst->hasNoSideEffect())
       return WalkResult::interrupt();
 
     return WalkResult::advance();

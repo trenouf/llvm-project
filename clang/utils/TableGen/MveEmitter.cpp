@@ -80,7 +80,7 @@ using namespace llvm;
 
 namespace {
 
-class EmitterBase;
+class MveEmitter;
 class Result;
 
 // -----------------------------------------------------------------------------
@@ -140,7 +140,6 @@ public:
   TypeKind typeKind() const { return TKind; }
   virtual ~Type() = default;
   virtual bool requiresFloat() const = 0;
-  virtual bool requiresMVE() const = 0;
   virtual unsigned sizeInBits() const = 0;
   virtual std::string cName() const = 0;
   virtual std::string llvmName() const {
@@ -180,7 +179,6 @@ public:
   VoidType() : Type(TypeKind::Void) {}
   unsigned sizeInBits() const override { return 0; }
   bool requiresFloat() const override { return false; }
-  bool requiresMVE() const override { return false; }
   std::string cName() const override { return "void"; }
 
   static bool classof(const Type *T) { return T->typeKind() == TypeKind::Void; }
@@ -196,7 +194,6 @@ public:
       : Type(TypeKind::Pointer), Pointee(Pointee), Const(Const) {}
   unsigned sizeInBits() const override { return 32; }
   bool requiresFloat() const override { return Pointee->requiresFloat(); }
-  bool requiresMVE() const override { return Pointee->requiresMVE(); }
   std::string cName() const override {
     std::string Name = Pointee->cName();
 
@@ -277,7 +274,6 @@ public:
   }
   bool isInteger() const { return Kind != ScalarTypeKind::Float; }
   bool requiresFloat() const override { return !isInteger(); }
-  bool requiresMVE() const override { return false; }
   bool hasNonstandardName() const { return !NameOverride.empty(); }
 
   static bool classof(const Type *T) {
@@ -295,7 +291,6 @@ public:
   unsigned sizeInBits() const override { return Lanes * Element->sizeInBits(); }
   unsigned lanes() const { return Lanes; }
   bool requiresFloat() const override { return Element->requiresFloat(); }
-  bool requiresMVE() const override { return true; }
   std::string cNameBase() const override {
     return Element->cNameBase() + "x" + utostr(Lanes);
   }
@@ -322,7 +317,6 @@ public:
   }
   unsigned registers() const { return Registers; }
   bool requiresFloat() const override { return Element->requiresFloat(); }
-  bool requiresMVE() const override { return true; }
   std::string cNameBase() const override {
     return Element->cNameBase() + "x" + utostr(Registers);
   }
@@ -347,7 +341,6 @@ public:
   unsigned sizeInBits() const override { return 16; }
   std::string cNameBase() const override { return "mve_pred16"; }
   bool requiresFloat() const override { return false; };
-  bool requiresMVE() const override { return true; }
   std::string llvmName() const override {
     // Use <4 x i1> instead of <2 x i1> for two-lane vector types. See
     // the comment in llvm/lib/Target/ARM/ARMInstrMVE.td for further
@@ -412,7 +405,7 @@ struct CodeGenParamAllocator {
   // We rely on the recursive code generation working identically in passes 1
   // and 2, so that the same list of calls to allocParam happen in the same
   // order. That guarantees that the parameter numbers recorded in pass 1 will
-  // match the entries in this vector that store what EmitterBase::EmitBuiltinCG
+  // match the entries in this vector that store what MveEmitter::EmitBuiltinCG
   // decided to do about each one in pass 2.
   std::vector<int> *ParamNumberMap = nullptr;
 
@@ -801,9 +794,6 @@ class ACLEIntrinsic {
   // shares with at least one other intrinsic.
   std::string ShortName, FullName;
 
-  // Name of the architecture extension, used in the Clang builtin name
-  StringRef BuiltinExtension;
-
   // A very small number of intrinsics _only_ have a polymorphic
   // variant (vuninitializedq taking an unevaluated argument).
   bool PolymorphicOnly;
@@ -811,10 +801,6 @@ class ACLEIntrinsic {
   // Another rarely-used flag indicating that the builtin doesn't
   // evaluate its argument(s) at all.
   bool NonEvaluating;
-
-  // True if the intrinsic needs only the C header part (no codegen, semantic
-  // checks, etc). Used for redeclaring MVE intrinsics in the arm_cde.h header.
-  bool HeaderOnly;
 
   const Type *ReturnType;
   std::vector<const Type *> ArgTypes;
@@ -838,7 +824,6 @@ class ACLEIntrinsic {
 public:
   const std::string &shortName() const { return ShortName; }
   const std::string &fullName() const { return FullName; }
-  StringRef builtinExtension() const { return BuiltinExtension; }
   const Type *returnType() const { return ReturnType; }
   const std::vector<const Type *> &argTypes() const { return ArgTypes; }
   bool requiresFloat() const {
@@ -849,19 +834,13 @@ public:
         return true;
     return false;
   }
-  bool requiresMVE() const {
-    return ReturnType->requiresMVE() ||
-           any_of(ArgTypes, [](const Type *T) { return T->requiresMVE(); });
-  }
   bool polymorphic() const { return ShortName != FullName; }
   bool polymorphicOnly() const { return PolymorphicOnly; }
   bool nonEvaluating() const { return NonEvaluating; }
-  bool headerOnly() const { return HeaderOnly; }
 
-  // External entry point for code generation, called from EmitterBase.
+  // External entry point for code generation, called from MveEmitter.
   void genCode(raw_ostream &OS, CodeGenParamAllocator &ParamAlloc,
                unsigned Pass) const {
-    assert(!headerOnly() && "Called genCode for header-only intrinsic");
     if (!hasCode()) {
       for (auto kv : CustomCodeGenArgs)
         OS << "  " << kv.first << " = " << kv.second << ";\n";
@@ -902,7 +881,6 @@ public:
   }
 
   std::string genSema() const {
-    assert(!headerOnly() && "Called genSema for header-only intrinsic");
     std::vector<std::string> SemaChecks;
 
     for (const auto &kv : ImmediateArgs) {
@@ -954,21 +932,22 @@ public:
     }
     if (SemaChecks.empty())
       return "";
-    return join(std::begin(SemaChecks), std::end(SemaChecks),
-                " ||\n         ") +
-           ";\n";
+    return (Twine("  return ") +
+            join(std::begin(SemaChecks), std::end(SemaChecks),
+                 " ||\n         ") +
+            ";\n")
+        .str();
   }
 
-  ACLEIntrinsic(EmitterBase &ME, Record *R, const Type *Param);
+  ACLEIntrinsic(MveEmitter &ME, Record *R, const Type *Param);
 };
 
 // -----------------------------------------------------------------------------
 // The top-level class that holds all the state from analyzing the entire
 // Tablegen input.
 
-class EmitterBase {
-protected:
-  // EmitterBase holds a collection of all the types we've instantiated.
+class MveEmitter {
+  // MveEmitter holds a collection of all the types we've instantiated.
   VoidType Void;
   std::map<std::string, std::unique_ptr<ScalarType>> ScalarTypes;
   std::map<std::tuple<ScalarTypeKind, unsigned, unsigned>,
@@ -1043,21 +1022,18 @@ public:
   Result::Ptr getCodeForArg(unsigned ArgNum, const Type *ArgType, bool Promote,
                             bool Immediate);
 
-  void GroupSemaChecks(std::map<std::string, std::set<std::string>> &Checks);
-
   // Constructor and top-level functions.
 
-  EmitterBase(RecordKeeper &Records);
-  virtual ~EmitterBase() = default;
+  MveEmitter(RecordKeeper &Records);
 
-  virtual void EmitHeader(raw_ostream &OS) = 0;
-  virtual void EmitBuiltinDef(raw_ostream &OS) = 0;
-  virtual void EmitBuiltinSema(raw_ostream &OS) = 0;
+  void EmitHeader(raw_ostream &OS);
+  void EmitBuiltinDef(raw_ostream &OS);
+  void EmitBuiltinSema(raw_ostream &OS);
   void EmitBuiltinCG(raw_ostream &OS);
   void EmitBuiltinAliases(raw_ostream &OS);
 };
 
-const Type *EmitterBase::getType(Init *I, const Type *Param) {
+const Type *MveEmitter::getType(Init *I, const Type *Param) {
   if (auto Dag = dyn_cast<DagInit>(I))
     return getType(Dag, Param);
   if (auto Def = dyn_cast<DefInit>(I))
@@ -1066,7 +1042,7 @@ const Type *EmitterBase::getType(Init *I, const Type *Param) {
   PrintFatalError("Could not convert this value into a type");
 }
 
-const Type *EmitterBase::getType(Record *R, const Type *Param) {
+const Type *MveEmitter::getType(Record *R, const Type *Param) {
   // Pass to a subfield of any wrapper records. We don't expect more than one
   // of these: immediate operands are used as plain numbers rather than as
   // llvm::Value, so it's meaningless to promote their type anyway.
@@ -1085,7 +1061,7 @@ const Type *EmitterBase::getType(Record *R, const Type *Param) {
   PrintFatalError(R->getLoc(), "Could not convert this record into a type");
 }
 
-const Type *EmitterBase::getType(DagInit *D, const Type *Param) {
+const Type *MveEmitter::getType(DagInit *D, const Type *Param) {
   // The meat of the getType system: types in the Tablegen are represented by a
   // dag whose operators select sub-cases of this function.
 
@@ -1153,8 +1129,8 @@ const Type *EmitterBase::getType(DagInit *D, const Type *Param) {
   PrintFatalError("Bad operator in type dag expression");
 }
 
-Result::Ptr EmitterBase::getCodeForDag(DagInit *D, const Result::Scope &Scope,
-                                       const Type *Param) {
+Result::Ptr MveEmitter::getCodeForDag(DagInit *D, const Result::Scope &Scope,
+                                      const Type *Param) {
   Record *Op = cast<DefInit>(D->getOperator())->getDef();
 
   if (Op->getName() == "seq") {
@@ -1256,9 +1232,9 @@ Result::Ptr EmitterBase::getCodeForDag(DagInit *D, const Result::Scope &Scope,
   }
 }
 
-Result::Ptr EmitterBase::getCodeForDagArg(DagInit *D, unsigned ArgNum,
-                                          const Result::Scope &Scope,
-                                          const Type *Param) {
+Result::Ptr MveEmitter::getCodeForDagArg(DagInit *D, unsigned ArgNum,
+                                         const Result::Scope &Scope,
+                                         const Type *Param) {
   Init *Arg = D->getArg(ArgNum);
   StringRef Name = D->getArgNameStr(ArgNum);
 
@@ -1290,8 +1266,8 @@ Result::Ptr EmitterBase::getCodeForDagArg(DagInit *D, unsigned ArgNum,
   PrintFatalError("bad dag argument type for code generation");
 }
 
-Result::Ptr EmitterBase::getCodeForArg(unsigned ArgNum, const Type *ArgType,
-                                       bool Promote, bool Immediate) {
+Result::Ptr MveEmitter::getCodeForArg(unsigned ArgNum, const Type *ArgType,
+                                      bool Promote, bool Immediate) {
   Result::Ptr V = std::make_shared<BuiltinArgResult>(
       ArgNum, isa<PointerType>(ArgType), Immediate);
 
@@ -1310,7 +1286,7 @@ Result::Ptr EmitterBase::getCodeForArg(unsigned ArgNum, const Type *ArgType,
   return V;
 }
 
-ACLEIntrinsic::ACLEIntrinsic(EmitterBase &ME, Record *R, const Type *Param)
+ACLEIntrinsic::ACLEIntrinsic(MveEmitter &ME, Record *R, const Type *Param)
     : ReturnType(ME.getType(R->getValueAsDef("ret"), Param)) {
   // Derive the intrinsic's full name, by taking the name of the
   // Tablegen record (or override) and appending the suffix from its
@@ -1349,11 +1325,8 @@ ACLEIntrinsic::ACLEIntrinsic(EmitterBase &ME, Record *R, const Type *Param)
   }
   ShortName = join(std::begin(NameParts), std::end(NameParts), "_");
 
-  BuiltinExtension = R->getValueAsString("builtinExtension");
-
   PolymorphicOnly = R->getValueAsBit("polymorphicOnly");
   NonEvaluating = R->getValueAsBit("nonEvaluating");
-  HeaderOnly = R->getValueAsBit("headerOnly");
 
   // Process the intrinsic's argument list.
   DagInit *ArgsDag = R->getValueAsDag("args");
@@ -1446,8 +1419,8 @@ ACLEIntrinsic::ACLEIntrinsic(EmitterBase &ME, Record *R, const Type *Param)
   }
 }
 
-EmitterBase::EmitterBase(RecordKeeper &Records) {
-  // Construct the whole EmitterBase.
+MveEmitter::MveEmitter(RecordKeeper &Records) {
+  // Construct the whole MveEmitter.
 
   // First, look up all the instances of PrimitiveType. This gives us the list
   // of vector typedefs we have to put in arm_mve.h, and also allows us to
@@ -1485,260 +1458,6 @@ class raw_self_contained_string_ostream : private string_holder,
 public:
   raw_self_contained_string_ostream()
       : string_holder(), raw_string_ostream(S) {}
-};
-
-const char LLVMLicenseHeader[] =
-    " *\n"
-    " *\n"
-    " * Part of the LLVM Project, under the Apache License v2.0 with LLVM"
-    " Exceptions.\n"
-    " * See https://llvm.org/LICENSE.txt for license information.\n"
-    " * SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception\n"
-    " *\n"
-    " *===-----------------------------------------------------------------"
-    "------===\n"
-    " */\n"
-    "\n";
-
-// Machinery for the grouping of intrinsics by similar codegen.
-//
-// The general setup is that 'MergeableGroup' stores the things that a set of
-// similarly shaped intrinsics have in common: the text of their code
-// generation, and the number and type of their parameter variables.
-// MergeableGroup is the key in a std::map whose value is a set of
-// OutputIntrinsic, which stores the ways in which a particular intrinsic
-// specializes the MergeableGroup's generic description: the function name and
-// the _values_ of the parameter variables.
-
-struct ComparableStringVector : std::vector<std::string> {
-  // Infrastructure: a derived class of vector<string> which comes with an
-  // ordering, so that it can be used as a key in maps and an element in sets.
-  // There's no requirement on the ordering beyond being deterministic.
-  bool operator<(const ComparableStringVector &rhs) const {
-    if (size() != rhs.size())
-      return size() < rhs.size();
-    for (size_t i = 0, e = size(); i < e; ++i)
-      if ((*this)[i] != rhs[i])
-        return (*this)[i] < rhs[i];
-    return false;
-  }
-};
-
-struct OutputIntrinsic {
-  const ACLEIntrinsic *Int;
-  std::string Name;
-  ComparableStringVector ParamValues;
-  bool operator<(const OutputIntrinsic &rhs) const {
-    if (Name != rhs.Name)
-      return Name < rhs.Name;
-    return ParamValues < rhs.ParamValues;
-  }
-};
-struct MergeableGroup {
-  std::string Code;
-  ComparableStringVector ParamTypes;
-  bool operator<(const MergeableGroup &rhs) const {
-    if (Code != rhs.Code)
-      return Code < rhs.Code;
-    return ParamTypes < rhs.ParamTypes;
-  }
-};
-
-void EmitterBase::EmitBuiltinCG(raw_ostream &OS) {
-  // Pass 1: generate code for all the intrinsics as if every type or constant
-  // that can possibly be abstracted out into a parameter variable will be.
-  // This identifies the sets of intrinsics we'll group together into a single
-  // piece of code generation.
-
-  std::map<MergeableGroup, std::set<OutputIntrinsic>> MergeableGroupsPrelim;
-
-  for (const auto &kv : ACLEIntrinsics) {
-    const ACLEIntrinsic &Int = *kv.second;
-    if (Int.headerOnly())
-      continue;
-
-    MergeableGroup MG;
-    OutputIntrinsic OI;
-
-    OI.Int = &Int;
-    OI.Name = Int.fullName();
-    CodeGenParamAllocator ParamAllocPrelim{&MG.ParamTypes, &OI.ParamValues};
-    raw_string_ostream OS(MG.Code);
-    Int.genCode(OS, ParamAllocPrelim, 1);
-    OS.flush();
-
-    MergeableGroupsPrelim[MG].insert(OI);
-  }
-
-  // Pass 2: for each of those groups, optimize the parameter variable set by
-  // eliminating 'parameters' that are the same for all intrinsics in the
-  // group, and merging together pairs of parameter variables that take the
-  // same values as each other for all intrinsics in the group.
-
-  std::map<MergeableGroup, std::set<OutputIntrinsic>> MergeableGroups;
-
-  for (const auto &kv : MergeableGroupsPrelim) {
-    const MergeableGroup &MG = kv.first;
-    std::vector<int> ParamNumbers;
-    std::map<ComparableStringVector, int> ParamNumberMap;
-
-    // Loop over the parameters for this group.
-    for (size_t i = 0, e = MG.ParamTypes.size(); i < e; ++i) {
-      // Is this parameter the same for all intrinsics in the group?
-      const OutputIntrinsic &OI_first = *kv.second.begin();
-      bool Constant = all_of(kv.second, [&](const OutputIntrinsic &OI) {
-        return OI.ParamValues[i] == OI_first.ParamValues[i];
-      });
-
-      // If so, record it as -1, meaning 'no parameter variable needed'. Then
-      // the corresponding call to allocParam in pass 2 will not generate a
-      // variable at all, and just use the value inline.
-      if (Constant) {
-        ParamNumbers.push_back(-1);
-        continue;
-      }
-
-      // Otherwise, make a list of the values this parameter takes for each
-      // intrinsic, and see if that value vector matches anything we already
-      // have. We also record the parameter type, so that we don't accidentally
-      // match up two parameter variables with different types. (Not that
-      // there's much chance of them having textually equivalent values, but in
-      // _principle_ it could happen.)
-      ComparableStringVector key;
-      key.push_back(MG.ParamTypes[i]);
-      for (const auto &OI : kv.second)
-        key.push_back(OI.ParamValues[i]);
-
-      auto Found = ParamNumberMap.find(key);
-      if (Found != ParamNumberMap.end()) {
-        // Yes, an existing parameter variable can be reused for this.
-        ParamNumbers.push_back(Found->second);
-        continue;
-      }
-
-      // No, we need a new parameter variable.
-      int ExistingIndex = ParamNumberMap.size();
-      ParamNumberMap[key] = ExistingIndex;
-      ParamNumbers.push_back(ExistingIndex);
-    }
-
-    // Now we're ready to do the pass 2 code generation, which will emit the
-    // reduced set of parameter variables we've just worked out.
-
-    for (const auto &OI_prelim : kv.second) {
-      const ACLEIntrinsic *Int = OI_prelim.Int;
-
-      MergeableGroup MG;
-      OutputIntrinsic OI;
-
-      OI.Int = OI_prelim.Int;
-      OI.Name = OI_prelim.Name;
-      CodeGenParamAllocator ParamAlloc{&MG.ParamTypes, &OI.ParamValues,
-                                       &ParamNumbers};
-      raw_string_ostream OS(MG.Code);
-      Int->genCode(OS, ParamAlloc, 2);
-      OS.flush();
-
-      MergeableGroups[MG].insert(OI);
-    }
-  }
-
-  // Output the actual C++ code.
-
-  for (const auto &kv : MergeableGroups) {
-    const MergeableGroup &MG = kv.first;
-
-    // List of case statements in the main switch on BuiltinID, and an open
-    // brace.
-    const char *prefix = "";
-    for (const auto &OI : kv.second) {
-      OS << prefix << "case ARM::BI__builtin_arm_" << OI.Int->builtinExtension()
-         << "_" << OI.Name << ":";
-
-      prefix = "\n";
-    }
-    OS << " {\n";
-
-    if (!MG.ParamTypes.empty()) {
-      // If we've got some parameter variables, then emit their declarations...
-      for (size_t i = 0, e = MG.ParamTypes.size(); i < e; ++i) {
-        StringRef Type = MG.ParamTypes[i];
-        OS << "  " << Type;
-        if (!Type.endswith("*"))
-          OS << " ";
-        OS << " Param" << utostr(i) << ";\n";
-      }
-
-      // ... and an inner switch on BuiltinID that will fill them in with each
-      // individual intrinsic's values.
-      OS << "  switch (BuiltinID) {\n";
-      for (const auto &OI : kv.second) {
-        OS << "  case ARM::BI__builtin_arm_" << OI.Int->builtinExtension()
-           << "_" << OI.Name << ":\n";
-        for (size_t i = 0, e = MG.ParamTypes.size(); i < e; ++i)
-          OS << "    Param" << utostr(i) << " = " << OI.ParamValues[i] << ";\n";
-        OS << "    break;\n";
-      }
-      OS << "  }\n";
-    }
-
-    // And finally, output the code, and close the outer pair of braces. (The
-    // code will always end with a 'return' statement, so we need not insert a
-    // 'break' here.)
-    OS << MG.Code << "}\n";
-  }
-}
-
-void EmitterBase::EmitBuiltinAliases(raw_ostream &OS) {
-  // Build a sorted table of:
-  // - intrinsic id number
-  // - full name
-  // - polymorphic name or -1
-  StringToOffsetTable StringTable;
-  OS << "static const IntrinToName MapData[] = {\n";
-  for (const auto &kv : ACLEIntrinsics) {
-    const ACLEIntrinsic &Int = *kv.second;
-    if (Int.headerOnly())
-      continue;
-    int32_t ShortNameOffset =
-        Int.polymorphic() ? StringTable.GetOrAddStringOffset(Int.shortName())
-                          : -1;
-    OS << "  { ARM::BI__builtin_arm_" << Int.builtinExtension() << "_"
-       << Int.fullName() << ", "
-       << StringTable.GetOrAddStringOffset(Int.fullName()) << ", "
-       << ShortNameOffset << "},\n";
-  }
-  OS << "};\n\n";
-
-  OS << "ArrayRef<IntrinToName> Map(MapData);\n\n";
-
-  OS << "static const char IntrinNames[] = {\n";
-  StringTable.EmitString(OS);
-  OS << "};\n\n";
-}
-
-void EmitterBase::GroupSemaChecks(
-    std::map<std::string, std::set<std::string>> &Checks) {
-  for (const auto &kv : ACLEIntrinsics) {
-    const ACLEIntrinsic &Int = *kv.second;
-    if (Int.headerOnly())
-      continue;
-    std::string Check = Int.genSema();
-    if (!Check.empty())
-      Checks[Check].insert(Int.fullName());
-  }
-}
-
-// -----------------------------------------------------------------------------
-// The class used for generating arm_mve.h and related Clang bits
-//
-
-class MveEmitter : public EmitterBase {
-public:
-  MveEmitter(RecordKeeper &Records) : EmitterBase(Records){};
-  void EmitHeader(raw_ostream &OS) override;
-  void EmitBuiltinDef(raw_ostream &OS) override;
-  void EmitBuiltinSema(raw_ostream &OS) override;
 };
 
 void MveEmitter::EmitHeader(raw_ostream &OS) {
@@ -1835,7 +1554,7 @@ void MveEmitter::EmitHeader(raw_ostream &OS) {
         // included to be part of the type signature of a builtin that
         // was known to clang already.
         //
-        // The declarations use __attribute__(__clang_arm_builtin_alias),
+        // The declarations use __attribute__(__clang_arm_mve_alias),
         // so that each function declared will be recognized as the
         // appropriate MVE builtin in spite of its user-facing name.
         //
@@ -1874,8 +1593,8 @@ void MveEmitter::EmitHeader(raw_ostream &OS) {
         // match your call".
 
         OS << "static __inline__ __attribute__(("
-           << (Polymorphic ? "__overloadable__, " : "")
-           << "__clang_arm_builtin_alias(__builtin_arm_mve_" << Int.fullName()
+           << (Polymorphic ? "overloadable, " : "")
+           << "__clang_arm_mve_alias(__builtin_arm_mve_" << Int.fullName()
            << ")))\n"
            << RetTypeName << FunctionName << "(" << ArgTypesString << ");\n";
       }
@@ -1889,8 +1608,19 @@ void MveEmitter::EmitHeader(raw_ostream &OS) {
 
   OS << "/*===---- arm_mve.h - ARM MVE intrinsics "
         "-----------------------------------===\n"
-     << LLVMLicenseHeader
-     << "#ifndef __ARM_MVE_H\n"
+        " *\n"
+        " *\n"
+        " * Part of the LLVM Project, under the Apache License v2.0 with LLVM "
+        "Exceptions.\n"
+        " * See https://llvm.org/LICENSE.txt for license information.\n"
+        " * SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception\n"
+        " *\n"
+        " *===-------------------------------------------------------------"
+        "----"
+        "------===\n"
+        " */\n"
+        "\n"
+        "#ifndef __ARM_MVE_H\n"
         "#define __ARM_MVE_H\n"
         "\n"
         "#if !__ARM_FEATURE_MVE\n"
@@ -1953,171 +1683,251 @@ void MveEmitter::EmitBuiltinDef(raw_ostream &OS) {
 
 void MveEmitter::EmitBuiltinSema(raw_ostream &OS) {
   std::map<std::string, std::set<std::string>> Checks;
-  GroupSemaChecks(Checks);
+
+  for (const auto &kv : ACLEIntrinsics) {
+    const ACLEIntrinsic &Int = *kv.second;
+    std::string Check = Int.genSema();
+    if (!Check.empty())
+      Checks[Check].insert(Int.fullName());
+  }
 
   for (const auto &kv : Checks) {
     for (StringRef Name : kv.second)
       OS << "case ARM::BI__builtin_arm_mve_" << Name << ":\n";
-    OS << "  return " << kv.first;
+    OS << kv.first;
   }
 }
 
-// -----------------------------------------------------------------------------
-// The class used for generating arm_cde.h and related Clang bits
+// Machinery for the grouping of intrinsics by similar codegen.
 //
+// The general setup is that 'MergeableGroup' stores the things that a set of
+// similarly shaped intrinsics have in common: the text of their code
+// generation, and the number and type of their parameter variables.
+// MergeableGroup is the key in a std::map whose value is a set of
+// OutputIntrinsic, which stores the ways in which a particular intrinsic
+// specializes the MergeableGroup's generic description: the function name and
+// the _values_ of the parameter variables.
 
-class CdeEmitter : public EmitterBase {
-public:
-  CdeEmitter(RecordKeeper &Records) : EmitterBase(Records){};
-  void EmitHeader(raw_ostream &OS) override;
-  void EmitBuiltinDef(raw_ostream &OS) override;
-  void EmitBuiltinSema(raw_ostream &OS) override;
+struct ComparableStringVector : std::vector<std::string> {
+  // Infrastructure: a derived class of vector<string> which comes with an
+  // ordering, so that it can be used as a key in maps and an element in sets.
+  // There's no requirement on the ordering beyond being deterministic.
+  bool operator<(const ComparableStringVector &rhs) const {
+    if (size() != rhs.size())
+      return size() < rhs.size();
+    for (size_t i = 0, e = size(); i < e; ++i)
+      if ((*this)[i] != rhs[i])
+        return (*this)[i] < rhs[i];
+    return false;
+  }
 };
 
-void CdeEmitter::EmitHeader(raw_ostream &OS) {
-  // Accumulate pieces of the header file that will be enabled under various
-  // different combinations of #ifdef. The index into parts[] is one of the
-  // following:
-  constexpr unsigned None = 0;
-  constexpr unsigned MVE = 1;
-  constexpr unsigned MVEFloat = 2;
-
-  constexpr unsigned NumParts = 3;
-  raw_self_contained_string_ostream parts[NumParts];
-
-  // Write typedefs for all the required vector types, and a few scalar
-  // types that don't already have the name we want them to have.
-
-  parts[MVE] << "typedef uint16_t mve_pred16_t;\n";
-  parts[MVEFloat] << "typedef __fp16 float16_t;\n"
-                     "typedef float float32_t;\n";
-  for (const auto &kv : ScalarTypes) {
-    const ScalarType *ST = kv.second.get();
-    if (ST->hasNonstandardName())
-      continue;
-    raw_ostream &OS = parts[ST->requiresFloat() ? MVEFloat : MVE];
-    const VectorType *VT = getVectorType(ST);
-
-    OS << "typedef __attribute__((__neon_vector_type__(" << VT->lanes()
-       << "), __clang_arm_mve_strict_polymorphism)) " << ST->cName() << " "
-       << VT->cName() << ";\n";
+struct OutputIntrinsic {
+  const ACLEIntrinsic *Int;
+  std::string Name;
+  ComparableStringVector ParamValues;
+  bool operator<(const OutputIntrinsic &rhs) const {
+    if (Name != rhs.Name)
+      return Name < rhs.Name;
+    return ParamValues < rhs.ParamValues;
   }
-  parts[MVE] << "\n";
-  parts[MVEFloat] << "\n";
+};
+struct MergeableGroup {
+  std::string Code;
+  ComparableStringVector ParamTypes;
+  bool operator<(const MergeableGroup &rhs) const {
+    if (Code != rhs.Code)
+      return Code < rhs.Code;
+    return ParamTypes < rhs.ParamTypes;
+  }
+};
 
-  // Write declarations for all the intrinsics.
+void MveEmitter::EmitBuiltinCG(raw_ostream &OS) {
+  // Pass 1: generate code for all the intrinsics as if every type or constant
+  // that can possibly be abstracted out into a parameter variable will be.
+  // This identifies the sets of intrinsics we'll group together into a single
+  // piece of code generation.
+
+  std::map<MergeableGroup, std::set<OutputIntrinsic>> MergeableGroupsPrelim;
 
   for (const auto &kv : ACLEIntrinsics) {
     const ACLEIntrinsic &Int = *kv.second;
 
-    // We generate each intrinsic twice, under its full unambiguous
-    // name and its shorter polymorphic name (if the latter exists).
-    for (bool Polymorphic : {false, true}) {
-      if (Polymorphic && !Int.polymorphic())
+    MergeableGroup MG;
+    OutputIntrinsic OI;
+
+    OI.Int = &Int;
+    OI.Name = Int.fullName();
+    CodeGenParamAllocator ParamAllocPrelim{&MG.ParamTypes, &OI.ParamValues};
+    raw_string_ostream OS(MG.Code);
+    Int.genCode(OS, ParamAllocPrelim, 1);
+    OS.flush();
+
+    MergeableGroupsPrelim[MG].insert(OI);
+  }
+
+  // Pass 2: for each of those groups, optimize the parameter variable set by
+  // eliminating 'parameters' that are the same for all intrinsics in the
+  // group, and merging together pairs of parameter variables that take the
+  // same values as each other for all intrinsics in the group.
+
+  std::map<MergeableGroup, std::set<OutputIntrinsic>> MergeableGroups;
+
+  for (const auto &kv : MergeableGroupsPrelim) {
+    const MergeableGroup &MG = kv.first;
+    std::vector<int> ParamNumbers;
+    std::map<ComparableStringVector, int> ParamNumberMap;
+
+    // Loop over the parameters for this group.
+    for (size_t i = 0, e = MG.ParamTypes.size(); i < e; ++i) {
+      // Is this parameter the same for all intrinsics in the group?
+      const OutputIntrinsic &OI_first = *kv.second.begin();
+      bool Constant = all_of(kv.second, [&](const OutputIntrinsic &OI) {
+        return OI.ParamValues[i] == OI_first.ParamValues[i];
+      });
+
+      // If so, record it as -1, meaning 'no parameter variable needed'. Then
+      // the corresponding call to allocParam in pass 2 will not generate a
+      // variable at all, and just use the value inline.
+      if (Constant) {
+        ParamNumbers.push_back(-1);
         continue;
-      if (!Polymorphic && Int.polymorphicOnly())
+      }
+
+      // Otherwise, make a list of the values this parameter takes for each
+      // intrinsic, and see if that value vector matches anything we already
+      // have. We also record the parameter type, so that we don't accidentally
+      // match up two parameter variables with different types. (Not that
+      // there's much chance of them having textually equivalent values, but in
+      // _principle_ it could happen.)
+      ComparableStringVector key;
+      key.push_back(MG.ParamTypes[i]);
+      for (const auto &OI : kv.second)
+        key.push_back(OI.ParamValues[i]);
+
+      auto Found = ParamNumberMap.find(key);
+      if (Found != ParamNumberMap.end()) {
+        // Yes, an existing parameter variable can be reused for this.
+        ParamNumbers.push_back(Found->second);
         continue;
+      }
 
-      raw_ostream &OS =
-          parts[Int.requiresFloat() ? MVEFloat
-                                    : Int.requiresMVE() ? MVE : None];
+      // No, we need a new parameter variable.
+      int ExistingIndex = ParamNumberMap.size();
+      ParamNumberMap[key] = ExistingIndex;
+      ParamNumbers.push_back(ExistingIndex);
+    }
 
-      // Make the name of the function in this declaration.
-      std::string FunctionName =
-          "__arm_" + (Polymorphic ? Int.shortName() : Int.fullName());
+    // Now we're ready to do the pass 2 code generation, which will emit the
+    // reduced set of parameter variables we've just worked out.
 
-      // Make strings for the types involved in the function's
-      // prototype.
-      std::string RetTypeName = Int.returnType()->cName();
-      if (!StringRef(RetTypeName).endswith("*"))
-        RetTypeName += " ";
+    for (const auto &OI_prelim : kv.second) {
+      const ACLEIntrinsic *Int = OI_prelim.Int;
 
-      std::vector<std::string> ArgTypeNames;
-      for (const Type *ArgTypePtr : Int.argTypes())
-        ArgTypeNames.push_back(ArgTypePtr->cName());
-      std::string ArgTypesString =
-          join(std::begin(ArgTypeNames), std::end(ArgTypeNames), ", ");
+      MergeableGroup MG;
+      OutputIntrinsic OI;
 
-      // Emit the actual declaration. See MveEmitter::EmitHeader for detailed
-      // comments
-      OS << "static __inline__ __attribute__(("
-         << (Polymorphic ? "__overloadable__, " : "")
-         << "__clang_arm_builtin_alias(__builtin_arm_" << Int.builtinExtension()
-         << "_" << Int.fullName() << ")))\n"
-         << RetTypeName << FunctionName << "(" << ArgTypesString << ");\n";
+      OI.Int = OI_prelim.Int;
+      OI.Name = OI_prelim.Name;
+      CodeGenParamAllocator ParamAlloc{&MG.ParamTypes, &OI.ParamValues,
+                                       &ParamNumbers};
+      raw_string_ostream OS(MG.Code);
+      Int->genCode(OS, ParamAlloc, 2);
+      OS.flush();
+
+      MergeableGroups[MG].insert(OI);
     }
   }
 
-  for (auto &part : parts)
-    part << "\n";
+  // Output the actual C++ code.
 
-  // Now we've finished accumulating bits and pieces into the parts[] array.
-  // Put it all together to write the final output file.
+  for (const auto &kv : MergeableGroups) {
+    const MergeableGroup &MG = kv.first;
 
-  OS << "/*===---- arm_cde.h - ARM CDE intrinsics "
-        "-----------------------------------===\n"
-     << LLVMLicenseHeader
-     << "#ifndef __ARM_CDE_H\n"
-        "#define __ARM_CDE_H\n"
-        "\n"
-        "#if !__ARM_FEATURE_CDE\n"
-        "#error \"CDE support not enabled\"\n"
-        "#endif\n"
-        "\n"
-        "#include <stdint.h>\n"
-        "\n"
-        "#ifdef __cplusplus\n"
-        "extern \"C\" {\n"
-        "#endif\n"
-        "\n";
+    // List of case statements in the main switch on BuiltinID, and an open
+    // brace.
+    const char *prefix = "";
+    for (const auto &OI : kv.second) {
+      OS << prefix << "case ARM::BI__builtin_arm_mve_" << OI.Name << ":";
+      prefix = "\n";
+    }
+    OS << " {\n";
 
-  for (size_t i = 0; i < NumParts; ++i) {
-    std::string condition;
-    if (i == MVEFloat)
-      condition = "__ARM_FEATURE_MVE & 2";
-    else if (i == MVE)
-      condition = "__ARM_FEATURE_MVE";
+    if (!MG.ParamTypes.empty()) {
+      // If we've got some parameter variables, then emit their declarations...
+      for (size_t i = 0, e = MG.ParamTypes.size(); i < e; ++i) {
+        StringRef Type = MG.ParamTypes[i];
+        OS << "  " << Type;
+        if (!Type.endswith("*"))
+          OS << " ";
+        OS << " Param" << utostr(i) << ";\n";
+      }
 
-    if (!condition.empty())
-      OS << "#if " << condition << "\n\n";
-    OS << parts[i].str();
-    if (!condition.empty())
-      OS << "#endif /* " << condition << " */\n\n";
+      // ... and an inner switch on BuiltinID that will fill them in with each
+      // individual intrinsic's values.
+      OS << "  switch (BuiltinID) {\n";
+      for (const auto &OI : kv.second) {
+        OS << "  case ARM::BI__builtin_arm_mve_" << OI.Name << ":\n";
+        for (size_t i = 0, e = MG.ParamTypes.size(); i < e; ++i)
+          OS << "    Param" << utostr(i) << " = " << OI.ParamValues[i] << ";\n";
+        OS << "    break;\n";
+      }
+      OS << "  }\n";
+    }
+
+    // And finally, output the code, and close the outer pair of braces. (The
+    // code will always end with a 'return' statement, so we need not insert a
+    // 'break' here.)
+    OS << MG.Code << "}\n";
   }
-
-  OS << "#ifdef __cplusplus\n"
-        "} /* extern \"C\" */\n"
-        "#endif\n"
-        "\n"
-        "#endif /* __ARM_CDE_H */\n";
 }
 
-void CdeEmitter::EmitBuiltinDef(raw_ostream &OS) {
+void MveEmitter::EmitBuiltinAliases(raw_ostream &OS) {
+  // Build a sorted table of:
+  // - intrinsic id number
+  // - full name
+  // - polymorphic name or -1
+  StringToOffsetTable StringTable;
+  OS << "struct IntrinToName {\n"
+        "  uint32_t Id;\n"
+        "  int32_t FullName;\n"
+        "  int32_t ShortName;\n"
+        "};\n";
+  OS << "static const IntrinToName Map[] = {\n";
   for (const auto &kv : ACLEIntrinsics) {
-    if (kv.second->headerOnly())
-      continue;
     const ACLEIntrinsic &Int = *kv.second;
-    OS << "TARGET_HEADER_BUILTIN(__builtin_arm_cde_" << Int.fullName()
-       << ", \"\", \"ncU\", \"arm_cde.h\", ALL_LANGUAGES, \"\")\n";
+    int32_t ShortNameOffset =
+        Int.polymorphic() ? StringTable.GetOrAddStringOffset(Int.shortName())
+                          : -1;
+    OS << "  { ARM::BI__builtin_arm_mve_" << Int.fullName() << ", "
+       << StringTable.GetOrAddStringOffset(Int.fullName()) << ", "
+       << ShortNameOffset << "},\n";
   }
-}
+  OS << "};\n\n";
 
-void CdeEmitter::EmitBuiltinSema(raw_ostream &OS) {
-  std::map<std::string, std::set<std::string>> Checks;
-  GroupSemaChecks(Checks);
+  OS << "static const char IntrinNames[] = {\n";
+  StringTable.EmitString(OS);
+  OS << "};\n\n";
 
-  for (const auto &kv : Checks) {
-    for (StringRef Name : kv.second)
-      OS << "case ARM::BI__builtin_arm_cde_" << Name << ":\n";
-    OS << "  Err = " << kv.first << "  break;\n";
-  }
+  OS << "auto It = std::lower_bound(std::begin(Map), "
+        "std::end(Map), BuiltinID,\n"
+        "  [](const IntrinToName &L, unsigned Id) {\n"
+        "    return L.Id < Id;\n"
+        "  });\n";
+  OS << "if (It == std::end(Map) || It->Id != BuiltinID)\n"
+        "  return false;\n";
+  OS << "StringRef FullName(&IntrinNames[It->FullName]);\n";
+  OS << "if (AliasName == FullName)\n"
+        "  return true;\n";
+  OS << "if (It->ShortName == -1)\n"
+        "  return false;\n";
+  OS << "StringRef ShortName(&IntrinNames[It->ShortName]);\n";
+  OS << "return AliasName == ShortName;\n";
 }
 
 } // namespace
 
 namespace clang {
-
-// MVE
 
 void EmitMveHeader(RecordKeeper &Records, raw_ostream &OS) {
   MveEmitter(Records).EmitHeader(OS);
@@ -2137,28 +1947,6 @@ void EmitMveBuiltinCG(RecordKeeper &Records, raw_ostream &OS) {
 
 void EmitMveBuiltinAliases(RecordKeeper &Records, raw_ostream &OS) {
   MveEmitter(Records).EmitBuiltinAliases(OS);
-}
-
-// CDE
-
-void EmitCdeHeader(RecordKeeper &Records, raw_ostream &OS) {
-  CdeEmitter(Records).EmitHeader(OS);
-}
-
-void EmitCdeBuiltinDef(RecordKeeper &Records, raw_ostream &OS) {
-  CdeEmitter(Records).EmitBuiltinDef(OS);
-}
-
-void EmitCdeBuiltinSema(RecordKeeper &Records, raw_ostream &OS) {
-  CdeEmitter(Records).EmitBuiltinSema(OS);
-}
-
-void EmitCdeBuiltinCG(RecordKeeper &Records, raw_ostream &OS) {
-  CdeEmitter(Records).EmitBuiltinCG(OS);
-}
-
-void EmitCdeBuiltinAliases(RecordKeeper &Records, raw_ostream &OS) {
-  CdeEmitter(Records).EmitBuiltinAliases(OS);
 }
 
 } // end namespace clang

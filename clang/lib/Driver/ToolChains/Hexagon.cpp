@@ -544,8 +544,7 @@ unsigned HexagonToolChain::getOptimizationLevel(
 void HexagonToolChain::addClangTargetOptions(const ArgList &DriverArgs,
                                              ArgStringList &CC1Args,
                                              Action::OffloadKind) const {
-
-  bool UseInitArrayDefault = getTriple().isMusl();
+  bool UseInitArrayDefault = false;
 
   if (!DriverArgs.hasFlag(options::OPT_fuse_init_array,
                           options::OPT_fno_use_init_array,

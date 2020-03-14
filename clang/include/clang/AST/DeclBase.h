@@ -626,16 +626,7 @@ protected:
     setModuleOwnershipKind(ModuleOwnershipKind::ModulePrivate);
   }
 
-public:
-  /// Set the FromASTFile flag. This indicates that this declaration
-  /// was deserialized and not parsed from source code and enables
-  /// features such as module ownership information.
-  void setFromASTFile() {
-    FromASTFile = true;
-  }
-
-  /// Set the owning module ID.  This may only be called for
-  /// deserialized Decls.
+  /// Set the owning module ID.
   void setOwningModuleID(unsigned ID) {
     assert(isFromASTFile() && "Only works on a deserialized declaration");
     *((unsigned*)this - 2) = ID;

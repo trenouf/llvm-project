@@ -819,23 +819,20 @@ template <> struct MDNodeKeyImpl<DIModule> {
   MDString *Name;
   MDString *ConfigurationMacros;
   MDString *IncludePath;
-  MDString *APINotesFile;
 
   MDNodeKeyImpl(Metadata *Scope, MDString *Name, MDString *ConfigurationMacros,
-                MDString *IncludePath, MDString *APINotesFile)
+                MDString *IncludePath)
       : Scope(Scope), Name(Name), ConfigurationMacros(ConfigurationMacros),
-        IncludePath(IncludePath), APINotesFile(APINotesFile) {}
+        IncludePath(IncludePath) {}
   MDNodeKeyImpl(const DIModule *N)
       : Scope(N->getRawScope()), Name(N->getRawName()),
         ConfigurationMacros(N->getRawConfigurationMacros()),
-        IncludePath(N->getRawIncludePath()),
-        APINotesFile(N->getRawAPINotesFile()) {}
+        IncludePath(N->getRawIncludePath()) {}
 
   bool isKeyOf(const DIModule *RHS) const {
     return Scope == RHS->getRawScope() && Name == RHS->getRawName() &&
            ConfigurationMacros == RHS->getRawConfigurationMacros() &&
-           IncludePath == RHS->getRawIncludePath() &&
-           APINotesFile == RHS->getRawAPINotesFile();
+           IncludePath == RHS->getRawIncludePath();
   }
 
   unsigned getHashValue() const {

@@ -316,12 +316,25 @@ class TwinePrinter:
   def to_string(self):
     return self.string_from_twine_object(self._val)
 
+def make_printer(string = None, children = None, hint = None):
+  """Create a printer from the parameters."""
+  class Printer : pass
+  printer = Printer()
+  if string:
+    setattr(printer, 'to_string', lambda: string)
+  if children:
+    setattr(printer, 'children', lambda: children)
+  if hint:
+    setattr(printer, 'display_hint', lambda: hint)
+  return printer
+
 def get_pointer_int_pair(val):
   """Get tuple from llvm::PointerIntPair."""
   info_name = val.type.template_argument(4).strip_typedefs().name
-  # Note: this throws a gdb.error if the info type is not used (by means of a
-  # call to getPointer() or similar) in the current translation unit.
-  enum_type = gdb.lookup_type(info_name + '::MaskAndShiftConstants')
+  try:
+    enum_type = gdb.lookup_type(info_name + '::MaskAndShiftConstants')
+  except gdb.error:
+    return (None, None)
   enum_dict = gdb.types.make_enum_dict(enum_type)
   ptr_mask = enum_dict[info_name + '::PointerBitMask']
   int_shift = enum_dict[info_name + '::IntShift']
@@ -331,48 +344,26 @@ def get_pointer_int_pair(val):
   value = ((pair_union >> int_shift) & int_mask)
   return (pointer, value)
 
-class PointerIntPairPrinter:
-  """Print a PointerIntPair."""
-
-  def __init__(self, pointer, value):
-    self.pointer = pointer
-    self.value = value
-
-  def children(self):
-    yield ('pointer', self.pointer)
-    yield ('value', self.value)
-
 def make_pointer_int_pair_printer(val):
   """Factory for an llvm::PointerIntPair printer."""
-  try:
-    pointer, value = get_pointer_int_pair(val)
-  except gdb.error:
-    return None  # If PointerIntPair cannot be analyzed, print as raw value.
+  pointer, value = get_pointer_int_pair(val)
+  if not pointer or not value:
+    return None
   pointer_type = val.type.template_argument(0)
   value_type = val.type.template_argument(2)
-  return PointerIntPairPrinter(pointer.cast(pointer_type),
-                               value.cast(value_type))
-
-class PointerUnionPrinter:
-  """Print a PointerUnion."""
-
-  def __init__(self, pointer):
-    self.pointer = pointer
-
-  def children(self):
-    yield ('pointer', self.pointer)
-
-  def to_string(self):
-    return "Containing %s" % self.pointer.type
+  string = 'llvm::PointerIntPair<%s>' % pointer_type
+  children = [('pointer', pointer.cast(pointer_type)),
+              ('value', value.cast(value_type))]
+  return make_printer(string, children)
 
 def make_pointer_union_printer(val):
   """Factory for an llvm::PointerUnion printer."""
-  try:
-    pointer, value = get_pointer_int_pair(val['Val'])
-  except gdb.error:
-    return None  # If PointerIntPair cannot be analyzed, print as raw value.
+  pointer, value = get_pointer_int_pair(val['Val'])
+  if not pointer or not value:
+    return None
   pointer_type = val.type.template_argument(int(value))
-  return PointerUnionPrinter(pointer.cast(pointer_type))
+  string = 'llvm::PointerUnion containing %s' % pointer_type
+  return make_printer(string, [('pointer', pointer.cast(pointer_type))])
 
 class IlistNodePrinter:
   """Print an llvm::ilist_node object."""

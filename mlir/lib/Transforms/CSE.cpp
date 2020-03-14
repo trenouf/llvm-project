@@ -123,17 +123,6 @@ private:
 
 /// Attempt to eliminate a redundant operation.
 LogicalResult CSE::simplifyOperation(ScopedMapTy &knownValues, Operation *op) {
-  // Don't simplify terminator operations.
-  if (op->isKnownTerminator())
-    return failure();
-
-  // If the operation is already trivially dead just add it to the erase list.
-  if (isOpTriviallyDead(op)) {
-    opsToErase.push_back(op);
-    ++numDCE;
-    return success();
-  }
-
   // Don't simplify operations with nested blocks. We don't currently model
   // equality comparisons correctly among other things. It is also unclear
   // whether we would want to CSE such operations.
@@ -142,8 +131,15 @@ LogicalResult CSE::simplifyOperation(ScopedMapTy &knownValues, Operation *op) {
 
   // TODO(riverriddle) We currently only eliminate non side-effecting
   // operations.
-  if (!MemoryEffectOpInterface::hasNoEffect(op))
+  if (!op->hasNoSideEffect())
     return failure();
+
+  // If the operation is already trivially dead just add it to the erase list.
+  if (op->use_empty()) {
+    opsToErase.push_back(op);
+    ++numDCE;
+    return success();
+  }
 
   // Look for an existing definition for the operation.
   if (auto *existing = knownValues.lookup(op)) {

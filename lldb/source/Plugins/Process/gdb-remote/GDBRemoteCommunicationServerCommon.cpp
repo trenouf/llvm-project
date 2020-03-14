@@ -334,7 +334,7 @@ GDBRemoteCommunication::PacketResult
 GDBRemoteCommunicationServerCommon::Handle_qfProcessInfo(
     StringExtractorGDBRemote &packet) {
   m_proc_infos_index = 0;
-  m_proc_infos.clear();
+  m_proc_infos.Clear();
 
   ProcessInstanceInfoMatch match_info;
   packet.SetFilePos(::strlen("qfProcessInfo"));
@@ -416,9 +416,10 @@ GDBRemoteCommunicationServerCommon::Handle_qfProcessInfo(
 GDBRemoteCommunication::PacketResult
 GDBRemoteCommunicationServerCommon::Handle_qsProcessInfo(
     StringExtractorGDBRemote &packet) {
-  if (m_proc_infos_index < m_proc_infos.size()) {
+  if (m_proc_infos_index < m_proc_infos.GetSize()) {
     StreamString response;
-    CreateProcessInfoResponse(m_proc_infos[m_proc_infos_index], response);
+    CreateProcessInfoResponse(
+        m_proc_infos.GetProcessInfoAtIndex(m_proc_infos_index), response);
     ++m_proc_infos_index;
     return SendPacketNoLock(response.GetString());
   }

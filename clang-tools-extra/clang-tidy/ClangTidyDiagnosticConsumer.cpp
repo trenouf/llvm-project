@@ -26,7 +26,6 @@
 #include "clang/Tooling/Core/Diagnostic.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallString.h"
-#include "llvm/Support/Regex.h"
 #include <tuple>
 #include <vector>
 using namespace clang;

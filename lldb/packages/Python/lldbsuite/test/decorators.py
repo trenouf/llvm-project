@@ -158,8 +158,7 @@ def _decorateTest(mode,
                   debug_info=None,
                   swig_version=None, py_version=None,
                   macos_version=None,
-                  remote=None, dwarf_version=None,
-                  setting=None):
+                  remote=None, dwarf_version=None):
     def fn(self):
         skip_for_os = _match_decorator_property(
             lldbplatform.translate(oslist), self.getPlatform())
@@ -197,8 +196,6 @@ def _decorateTest(mode,
         skip_for_dwarf_version = (dwarf_version is None) or (
             _check_expected_version(dwarf_version[0], dwarf_version[1],
                                     self.getDwarfVersion()))
-        skip_for_setting = (setting is None) or (
-            setting in configuration.settings)
 
         # For the test to be skipped, all specified (e.g. not None) parameters must be True.
         # An unspecified parameter means "any", so those are marked skip by default.  And we skip
@@ -213,8 +210,7 @@ def _decorateTest(mode,
                       (py_version, skip_for_py_version, "python version"),
                       (macos_version, skip_for_macos_version, "macOS version"),
                       (remote, skip_for_remote, "platform locality (remote/local)"),
-                      (dwarf_version, skip_for_dwarf_version, "dwarf version"),
-                      (setting, skip_for_setting, "setting")]
+                      (dwarf_version, skip_for_dwarf_version, "dwarf version")]
         reasons = []
         final_skip_result = True
         for this_condition in conditions:
@@ -258,8 +254,7 @@ def expectedFailureAll(bugnumber=None,
                        debug_info=None,
                        swig_version=None, py_version=None,
                        macos_version=None,
-                       remote=None, dwarf_version=None,
-                       setting=None):
+                       remote=None, dwarf_version=None):
     return _decorateTest(DecorateMode.Xfail,
                          bugnumber=bugnumber,
                          oslist=oslist, hostoslist=hostoslist,
@@ -268,8 +263,7 @@ def expectedFailureAll(bugnumber=None,
                          debug_info=debug_info,
                          swig_version=swig_version, py_version=py_version,
                          macos_version=None,
-                         remote=remote,dwarf_version=dwarf_version,
-                         setting=setting)
+                         remote=remote,dwarf_version=dwarf_version)
 
 
 # provide a function to skip on defined oslist, compiler version, and archs
@@ -285,8 +279,7 @@ def skipIf(bugnumber=None,
            debug_info=None,
            swig_version=None, py_version=None,
            macos_version=None,
-           remote=None, dwarf_version=None,
-           setting=None):
+           remote=None, dwarf_version=None):
     return _decorateTest(DecorateMode.Skip,
                          bugnumber=bugnumber,
                          oslist=oslist, hostoslist=hostoslist,
@@ -295,8 +288,7 @@ def skipIf(bugnumber=None,
                          debug_info=debug_info,
                          swig_version=swig_version, py_version=py_version,
                          macos_version=macos_version,
-                         remote=remote, dwarf_version=dwarf_version,
-                         setting=setting)
+                         remote=remote, dwarf_version=dwarf_version)
 
 
 def _skip_for_android(reason, api_levels, archs):

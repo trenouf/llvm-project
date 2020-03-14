@@ -19,10 +19,6 @@
 #include "llvm/ADT/StringMap.h"
 #include "llvm/Support/Timer.h"
 
-namespace llvm {
-class Regex;
-}
-
 namespace clang {
 
 class ASTContext;

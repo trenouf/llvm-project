@@ -14,7 +14,6 @@
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/DeclTemplate.h"
-#include "clang/Basic/FileManager.h"
 #include "clang/Parse/ParseDiagnostic.h"
 #include "clang/Parse/RAIIObjectsForParser.h"
 #include "clang/Sema/DeclSpec.h"
@@ -1529,13 +1528,13 @@ ExprResult Parser::ParseSimpleAsm(bool ForAsmLabel, SourceLocation *EndLoc) {
   assert(Tok.is(tok::kw_asm) && "Not an asm!");
   SourceLocation Loc = ConsumeToken();
 
-  if (isGNUAsmQualifier(Tok)) {
-    // Remove from the end of 'asm' to the end of the asm qualifier.
+  if (Tok.is(tok::kw_volatile)) {
+    // Remove from the end of 'asm' to the end of 'volatile'.
     SourceRange RemovalRange(PP.getLocForEndOfToken(Loc),
                              PP.getLocForEndOfToken(Tok.getLocation()));
-    Diag(Tok, diag::err_global_asm_qualifier_ignored)
-        << GNUAsmQualifiers::getQualifierName(getGNUAsmQualifier(Tok))
-        << FixItHint::CreateRemoval(RemovalRange);
+
+    Diag(Tok, diag::warn_file_asm_volatile)
+      << FixItHint::CreateRemoval(RemovalRange);
     ConsumeToken();
   }
 

@@ -106,12 +106,10 @@ public:
             unsigned VF);
   unsigned getCallInstrCost(Function *F, Type *RetTy, ArrayRef<Type*> Tys);
   unsigned getIntrinsicInstrCost(Intrinsic::ID ID, Type *RetTy,
-                                 ArrayRef<Value *> Args, FastMathFlags FMF,
-                                 unsigned VF, const Instruction *I);
+            ArrayRef<Value*> Args, FastMathFlags FMF, unsigned VF);
   unsigned getIntrinsicInstrCost(Intrinsic::ID ID, Type *RetTy,
-                                 ArrayRef<Type *> Tys, FastMathFlags FMF,
-                                 unsigned ScalarizationCostPassed = UINT_MAX,
-                                 const Instruction *I = nullptr);
+            ArrayRef<Type*> Tys, FastMathFlags FMF,
+            unsigned ScalarizationCostPassed = UINT_MAX);
   unsigned getAddressComputationCost(Type *Tp, ScalarEvolution *SE,
             const SCEV *S);
   unsigned getMemoryOpCost(unsigned Opcode, Type *Src, MaybeAlign Alignment,
@@ -122,8 +120,7 @@ public:
   unsigned getShuffleCost(TTI::ShuffleKind Kind, Type *Tp, int Index,
             Type *SubTp);
   unsigned getGatherScatterOpCost(unsigned Opcode, Type *DataTy, Value *Ptr,
-                                  bool VariableMask, unsigned Alignment,
-                                  const Instruction *I);
+            bool VariableMask, unsigned Alignment);
   unsigned getInterleavedMemoryOpCost(unsigned Opcode, Type *VecTy,
             unsigned Factor, ArrayRef<unsigned> Indices, unsigned Alignment,
             unsigned AddressSpace, bool UseMaskForCond = false,

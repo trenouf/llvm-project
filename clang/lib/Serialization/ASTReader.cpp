@@ -4502,7 +4502,7 @@ ASTReader::ReadASTCore(StringRef FileName,
     if (ShouldFinalizePCM)
       MC.finalizePCM(FileName);
     else
-      MC.tryToDropPCM(FileName);
+      MC.tryToRemovePCM(FileName);
   });
   ModuleFile &F = *M;
   BitstreamCursor &Stream = F.Stream;
@@ -8491,10 +8491,10 @@ unsigned ASTReader::getModuleFileID(ModuleFile *F) {
   return (I - PCHModules.end()) << 1;
 }
 
-llvm::Optional<ASTSourceDescriptor>
+llvm::Optional<ExternalASTSource::ASTSourceDescriptor>
 ASTReader::getSourceDescriptor(unsigned ID) {
   if (const Module *M = getSubmodule(ID))
-    return ASTSourceDescriptor(*M);
+    return ExternalASTSource::ASTSourceDescriptor(*M);
 
   // If there is only a single PCH, return it instead.
   // Chained PCH are not supported.
@@ -8503,8 +8503,8 @@ ASTReader::getSourceDescriptor(unsigned ID) {
     ModuleFile &MF = ModuleMgr.getPrimaryModule();
     StringRef ModuleName = llvm::sys::path::filename(MF.OriginalSourceFileName);
     StringRef FileName = llvm::sys::path::filename(MF.FileName);
-    return ASTSourceDescriptor(ModuleName, MF.OriginalDir, FileName,
-                               MF.Signature);
+    return ASTReader::ASTSourceDescriptor(ModuleName, MF.OriginalDir, FileName,
+                                          MF.Signature);
   }
   return None;
 }

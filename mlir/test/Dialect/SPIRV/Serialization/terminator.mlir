@@ -1,6 +1,6 @@
 // RUN: mlir-translate -test-spirv-roundtrip %s | FileCheck %s
 
-spv.module Logical GLSL450 requires #spv.vce<v1.0, [Shader], []> {
+spv.module "Logical" "GLSL450" {
   // CHECK-LABEL: @ret
   spv.func @ret() -> () "None" {
     // CHECK: spv.Return

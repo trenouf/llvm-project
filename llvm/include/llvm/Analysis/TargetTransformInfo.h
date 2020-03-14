@@ -966,11 +966,8 @@ public:
   /// \p VariableMask - true when the memory access is predicated with a mask
   ///                   that is not a compile-time constant
   /// \p Alignment - alignment of single element
-  /// \p I - the optional original context instruction, if one exists, e.g. the
-  ///        load/store to transform or the call to the gather/scatter intrinsic
   int getGatherScatterOpCost(unsigned Opcode, Type *DataTy, Value *Ptr,
-                             bool VariableMask, unsigned Alignment,
-                             const Instruction *I = nullptr) const;
+                             bool VariableMask, unsigned Alignment) const;
 
   /// \return The cost of the interleaved memory operation.
   /// \p Opcode is the memory operation code
@@ -1009,22 +1006,16 @@ public:
   /// \returns The cost of Intrinsic instructions. Analyses the real arguments.
   /// Three cases are handled: 1. scalar instruction 2. vector instruction
   /// 3. scalar instruction which is to be vectorized with VF.
-  /// I is the optional original context instruction holding the call to the
-  /// intrinsic
   int getIntrinsicInstrCost(Intrinsic::ID ID, Type *RetTy,
                             ArrayRef<Value *> Args, FastMathFlags FMF,
-                            unsigned VF = 1,
-                            const Instruction *I = nullptr) const;
+                            unsigned VF = 1) const;
 
   /// \returns The cost of Intrinsic instructions. Types analysis only.
   /// If ScalarizationCostPassed is UINT_MAX, the cost of scalarizing the
   /// arguments and the return value will be computed based on types.
-  /// I is the optional original context instruction holding the call to the
-  /// intrinsic
-  int getIntrinsicInstrCost(Intrinsic::ID ID, Type *RetTy, ArrayRef<Type *> Tys,
-                            FastMathFlags FMF,
-                            unsigned ScalarizationCostPassed = UINT_MAX,
-                            const Instruction *I = nullptr) const;
+  int getIntrinsicInstrCost(Intrinsic::ID ID, Type *RetTy,
+                            ArrayRef<Type *> Tys, FastMathFlags FMF,
+                            unsigned ScalarizationCostPassed = UINT_MAX) const;
 
   /// \returns The cost of Call instructions.
   int getCallInstrCost(Function *F, Type *RetTy, ArrayRef<Type *> Tys) const;
@@ -1349,9 +1340,9 @@ public:
   virtual int getMaskedMemoryOpCost(unsigned Opcode, Type *Src,
                                     unsigned Alignment,
                                     unsigned AddressSpace) = 0;
-  virtual int getGatherScatterOpCost(unsigned Opcode, Type *DataTy, Value *Ptr,
-                                     bool VariableMask, unsigned Alignment,
-                                     const Instruction *I = nullptr) = 0;
+  virtual int getGatherScatterOpCost(unsigned Opcode, Type *DataTy,
+                                     Value *Ptr, bool VariableMask,
+                                     unsigned Alignment) = 0;
   virtual int getInterleavedMemoryOpCost(unsigned Opcode, Type *VecTy,
                                          unsigned Factor,
                                          ArrayRef<unsigned> Indices,
@@ -1364,12 +1355,10 @@ public:
   virtual int getMinMaxReductionCost(Type *Ty, Type *CondTy,
                                      bool IsPairwiseForm, bool IsUnsigned) = 0;
   virtual int getIntrinsicInstrCost(Intrinsic::ID ID, Type *RetTy,
-                                    ArrayRef<Type *> Tys, FastMathFlags FMF,
-                                    unsigned ScalarizationCostPassed,
-                                    const Instruction *I) = 0;
+                      ArrayRef<Type *> Tys, FastMathFlags FMF,
+                      unsigned ScalarizationCostPassed) = 0;
   virtual int getIntrinsicInstrCost(Intrinsic::ID ID, Type *RetTy,
-                                    ArrayRef<Value *> Args, FastMathFlags FMF,
-                                    unsigned VF, const Instruction *I) = 0;
+         ArrayRef<Value *> Args, FastMathFlags FMF, unsigned VF) = 0;
   virtual int getCallInstrCost(Function *F, Type *RetTy,
                                ArrayRef<Type *> Tys) = 0;
   virtual unsigned getNumberOfParts(Type *Tp) = 0;
@@ -1770,11 +1759,11 @@ public:
                             unsigned AddressSpace) override {
     return Impl.getMaskedMemoryOpCost(Opcode, Src, Alignment, AddressSpace);
   }
-  int getGatherScatterOpCost(unsigned Opcode, Type *DataTy, Value *Ptr,
-                             bool VariableMask, unsigned Alignment,
-                             const Instruction *I = nullptr) override {
+  int getGatherScatterOpCost(unsigned Opcode, Type *DataTy,
+                             Value *Ptr, bool VariableMask,
+                             unsigned Alignment) override {
     return Impl.getGatherScatterOpCost(Opcode, DataTy, Ptr, VariableMask,
-                                       Alignment, I);
+                                       Alignment);
   }
   int getInterleavedMemoryOpCost(unsigned Opcode, Type *VecTy, unsigned Factor,
                                  ArrayRef<unsigned> Indices, unsigned Alignment,
@@ -1792,18 +1781,15 @@ public:
                              bool IsPairwiseForm, bool IsUnsigned) override {
     return Impl.getMinMaxReductionCost(Ty, CondTy, IsPairwiseForm, IsUnsigned);
    }
-   int getIntrinsicInstrCost(Intrinsic::ID ID, Type *RetTy,
-                             ArrayRef<Type *> Tys, FastMathFlags FMF,
-                             unsigned ScalarizationCostPassed,
-                             const Instruction *I) override {
-     return Impl.getIntrinsicInstrCost(ID, RetTy, Tys, FMF,
-                                       ScalarizationCostPassed, I);
-   }
-   int getIntrinsicInstrCost(Intrinsic::ID ID, Type *RetTy,
-                             ArrayRef<Value *> Args, FastMathFlags FMF,
-                             unsigned VF, const Instruction *I) override {
-     return Impl.getIntrinsicInstrCost(ID, RetTy, Args, FMF, VF, I);
-   }
+  int getIntrinsicInstrCost(Intrinsic::ID ID, Type *RetTy, ArrayRef<Type *> Tys,
+               FastMathFlags FMF, unsigned ScalarizationCostPassed) override {
+    return Impl.getIntrinsicInstrCost(ID, RetTy, Tys, FMF,
+                                      ScalarizationCostPassed);
+  }
+  int getIntrinsicInstrCost(Intrinsic::ID ID, Type *RetTy,
+       ArrayRef<Value *> Args, FastMathFlags FMF, unsigned VF) override {
+    return Impl.getIntrinsicInstrCost(ID, RetTy, Args, FMF, VF);
+  }
   int getCallInstrCost(Function *F, Type *RetTy,
                        ArrayRef<Type *> Tys) override {
     return Impl.getCallInstrCost(F, RetTy, Tys);

@@ -529,21 +529,18 @@ EHFrameRegistrationPlugin::EHFrameRegistrationPlugin(
 void EHFrameRegistrationPlugin::modifyPassConfig(
     MaterializationResponsibility &MR, const Triple &TT,
     PassConfiguration &PassConfig) {
+  assert(!InProcessLinks.count(&MR) && "Link for MR already being tracked?");
 
-  PassConfig.PostFixupPasses.push_back(createEHFrameRecorderPass(
-      TT, [this, &MR](JITTargetAddress Addr, size_t Size) {
-        if (Addr) {
-          std::lock_guard<std::mutex> Lock(EHFramePluginMutex);
-          assert(!InProcessLinks.count(&MR) &&
-                 "Link for MR already being tracked?");
-          InProcessLinks[&MR] = {Addr, Size};
-        }
+  PassConfig.PostFixupPasses.push_back(
+      createEHFrameRecorderPass(TT, [this, &MR](JITTargetAddress Addr,
+                                                size_t Size) {
+        if (Addr)
+          InProcessLinks[&MR] = { Addr, Size };
       }));
 }
 
 Error EHFrameRegistrationPlugin::notifyEmitted(
     MaterializationResponsibility &MR) {
-  std::lock_guard<std::mutex> Lock(EHFramePluginMutex);
 
   auto EHFrameRangeItr = InProcessLinks.find(&MR);
   if (EHFrameRangeItr == InProcessLinks.end())
@@ -563,8 +560,6 @@ Error EHFrameRegistrationPlugin::notifyEmitted(
 }
 
 Error EHFrameRegistrationPlugin::notifyRemovingModule(VModuleKey K) {
-  std::lock_guard<std::mutex> Lock(EHFramePluginMutex);
-
   auto EHFrameRangeItr = TrackedEHFrameRanges.find(K);
   if (EHFrameRangeItr == TrackedEHFrameRanges.end())
     return Error::success();
@@ -578,7 +573,6 @@ Error EHFrameRegistrationPlugin::notifyRemovingModule(VModuleKey K) {
 }
 
 Error EHFrameRegistrationPlugin::notifyRemovingAllModules() {
-  std::lock_guard<std::mutex> Lock(EHFramePluginMutex);
 
   std::vector<EHFrameRange> EHFrameRanges =
     std::move(UntrackedEHFrameRanges);

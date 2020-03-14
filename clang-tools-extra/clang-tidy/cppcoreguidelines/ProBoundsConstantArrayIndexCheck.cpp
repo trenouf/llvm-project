@@ -86,10 +86,13 @@ void ProBoundsConstantArrayIndexCheck::check(
                   SourceRange(BaseRange.getEnd().getLocWithOffset(1),
                               IndexRange.getBegin().getLocWithOffset(-1)),
                   ", ")
-           << FixItHint::CreateReplacement(Matched->getEndLoc(), ")")
-           << Inserter->CreateIncludeInsertion(
-                  Result.SourceManager->getMainFileID(), GslHeader,
-                  /*IsAngled=*/false);
+           << FixItHint::CreateReplacement(Matched->getEndLoc(), ")");
+
+      Optional<FixItHint> Insertion = Inserter->CreateIncludeInsertion(
+          Result.SourceManager->getMainFileID(), GslHeader,
+          /*IsAngled=*/false);
+      if (Insertion)
+        Diag << Insertion.getValue();
     }
     return;
   }

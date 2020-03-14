@@ -9,7 +9,6 @@
 #ifndef LLDB_SOURCE_PLUGINS_EXPRESSIONPARSER_CLANG_ASTUTILS_H
 #define LLDB_SOURCE_PLUGINS_EXPRESSIONPARSER_CLANG_ASTUTILS_H
 
-#include "clang/Basic/Module.h"
 #include "clang/Sema/Lookup.h"
 #include "clang/Sema/MultiplexExternalSemaSource.h"
 #include "clang/Sema/Sema.h"
@@ -72,7 +71,7 @@ public:
     return m_Source->getModule(ID);
   }
 
-  llvm::Optional<clang::ASTSourceDescriptor>
+  llvm::Optional<ASTSourceDescriptor>
   getSourceDescriptor(unsigned ID) override {
     return m_Source->getSourceDescriptor(ID);
   }

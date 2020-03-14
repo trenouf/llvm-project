@@ -12,5 +12,4 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR}/../TestDialect)
 target_link_libraries(MLIRTestIR
   PUBLIC
   MLIRPass
-  MLIRTestDialect
   )

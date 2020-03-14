@@ -102,7 +102,7 @@ namespace clang {
 
     /// The number of record fields required for the Stmt class
     /// itself.
-    static const unsigned NumStmtFields = 0;
+    static const unsigned NumStmtFields = 1;
 
     /// The number of record fields required for the Expr class
     /// itself.
@@ -138,6 +138,7 @@ void ASTStmtReader::ReadTemplateKWAndArgsInfo(ASTTemplateKWAndArgsInfo &Args,
 }
 
 void ASTStmtReader::VisitStmt(Stmt *S) {
+  S->setIsOMPStructuredBlock(Record.readInt());
   assert(Record.getIdx() == NumStmtFields && "Incorrect statement field count");
 }
 
@@ -767,7 +768,6 @@ void ASTStmtReader::VisitConceptSpecializationExpr(
   E->TemplateKWLoc = Record.readSourceLocation();
   E->ConceptName = Record.readDeclarationNameInfo();
   E->NamedConcept = readDeclAs<ConceptDecl>();
-  E->FoundDecl = Record.readDeclAs<NamedDecl>();
   E->ArgsAsWritten = Record.readASTTemplateArgumentListInfo();
   llvm::SmallVector<TemplateArgument, 4> Args;
   for (unsigned I = 0; I < NumTemplateArgs; ++I)
@@ -1204,7 +1204,6 @@ void ASTStmtReader::VisitStmtExpr(StmtExpr *E) {
   E->setLParenLoc(readSourceLocation());
   E->setRParenLoc(readSourceLocation());
   E->setSubStmt(cast_or_null<CompoundStmt>(Record.readSubStmt()));
-  E->StmtExprBits.TemplateDepth = Record.readInt();
 }
 
 void ASTStmtReader::VisitChooseExpr(ChooseExpr *E) {
@@ -1819,17 +1818,9 @@ void ASTStmtReader::VisitExprWithCleanups(ExprWithCleanups *E) {
 
   unsigned NumObjects = Record.readInt();
   assert(NumObjects == E->getNumObjects());
-  for (unsigned i = 0; i != NumObjects; ++i) {
-    unsigned CleanupKind = Record.readInt();
-    ExprWithCleanups::CleanupObject Obj;
-    if (CleanupKind == COK_Block)
-      Obj = readDeclAs<BlockDecl>();
-    else if (CleanupKind == COK_CompoundLiteral)
-      Obj = cast<CompoundLiteralExpr>(Record.readSubExpr());
-    else
-      llvm_unreachable("unexpected cleanup object type");
-    E->getTrailingObjects<ExprWithCleanups::CleanupObject>()[i] = Obj;
-  }
+  for (unsigned i = 0; i != NumObjects; ++i)
+    E->getTrailingObjects<BlockDecl *>()[i] =
+        readDeclAs<BlockDecl>();
 
   E->ExprWithCleanupsBits.CleanupsHaveSideEffects = Record.readInt();
   E->SubExpr = Record.readSubExpr();

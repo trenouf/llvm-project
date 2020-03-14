@@ -15,7 +15,6 @@
 #define SPIRV_ARITHMETIC_OPS
 
 include "mlir/Dialect/SPIRV/SPIRVBase.td"
-include "mlir/Interfaces/SideEffects.td"
 
 class SPV_ArithmeticBinaryOp<string mnemonic, Type type,
                        list<OpTrait> traits = []> :

@@ -3539,7 +3539,6 @@ class EnumDecl : public TagDecl {
   /// negative enumerators of this enum. (see getNumNegativeBits)
   void setNumNegativeBits(unsigned Num) { EnumDeclBits.NumNegativeBits = Num; }
 
-public:
   /// True if this tag declaration is a scoped enumeration. Only
   /// possible in C++11 mode.
   void setScoped(bool Scoped = true) { EnumDeclBits.IsScoped = Scoped; }
@@ -3556,7 +3555,6 @@ public:
   /// Microsoft-style enumeration with a fixed underlying type.
   void setFixed(bool Fixed = true) { EnumDeclBits.IsFixed = Fixed; }
 
-private:
   /// True if a valid hash is stored in ODRHash.
   bool hasODRHash() const { return EnumDeclBits.HasODRHash; }
   void setHasODRHash(bool Hash = true) { EnumDeclBits.HasODRHash = Hash; }
@@ -4342,18 +4340,17 @@ class ImportDecl final : public Decl,
   friend class ASTReader;
   friend TrailingObjects;
 
-  /// The imported module.
-  Module *ImportedModule = nullptr;
-
-  /// The next import in the list of imports local to the translation
-  /// unit being parsed (not loaded from an AST file).
-  ///
-  /// Includes a bit that indicates whether we have source-location information
-  /// for each identifier in the module name.
+  /// The imported module, along with a bit that indicates whether
+  /// we have source-location information for each identifier in the module
+  /// name.
   ///
   /// When the bit is false, we only have a single source location for the
   /// end of the import declaration.
-  llvm::PointerIntPair<ImportDecl *, 1, bool> NextLocalImportAndComplete;
+  llvm::PointerIntPair<Module *, 1, bool> ImportedAndComplete;
+
+  /// The next import in the list of imports local to the translation
+  /// unit being parsed (not loaded from an AST file).
+  ImportDecl *NextLocalImport = nullptr;
 
   ImportDecl(DeclContext *DC, SourceLocation StartLoc, Module *Imported,
              ArrayRef<SourceLocation> IdentifierLocs);
@@ -4362,20 +4359,6 @@ class ImportDecl final : public Decl,
              SourceLocation EndLoc);
 
   ImportDecl(EmptyShell Empty) : Decl(Import, Empty) {}
-
-  bool isImportComplete() const { return NextLocalImportAndComplete.getInt(); }
-
-  void setImportComplete(bool C) { NextLocalImportAndComplete.setInt(C); }
-
-  /// The next import in the list of imports local to the translation
-  /// unit being parsed (not loaded from an AST file).
-  ImportDecl *getNextLocalImport() const {
-    return NextLocalImportAndComplete.getPointer();
-  }
-
-  void setNextLocalImport(ImportDecl *Import) {
-    NextLocalImportAndComplete.setPointer(Import);
-  }
 
 public:
   /// Create a new module import declaration.
@@ -4394,7 +4377,7 @@ public:
                                         unsigned NumLocations);
 
   /// Retrieve the module that was imported by the import declaration.
-  Module *getImportedModule() const { return ImportedModule; }
+  Module *getImportedModule() const { return ImportedAndComplete.getPointer(); }
 
   /// Retrieves the locations of each of the identifiers that make up
   /// the complete module name in the import declaration.

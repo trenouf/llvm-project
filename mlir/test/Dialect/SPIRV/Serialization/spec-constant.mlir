@@ -1,6 +1,6 @@
 // RUN: mlir-translate -test-spirv-roundtrip %s | FileCheck %s
 
-spv.module Logical GLSL450 requires #spv.vce<v1.0, [Shader], []> {
+spv.module "Logical" "GLSL450" {
   // CHECK: spv.specConstant @sc_true = true
   spv.specConstant @sc_true = true
   // CHECK: spv.specConstant @sc_false spec_id(1) = false

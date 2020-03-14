@@ -12,7 +12,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Analysis/Passes.h"
-#include "mlir/Analysis/Utils.h"
 #include "mlir/Dialect/AffineOps/AffineOps.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/LoopUtils.h"
@@ -38,10 +37,6 @@ private:
       llvm::cl::desc(
           "Enable memref filter testing in affine data copy optimization"),
       llvm::cl::init(false)};
-  Option<bool> clTestGenerateCopyForMemRegion{
-      *this, "for-memref-region",
-      llvm::cl::desc("Test copy generation for a single memref region"),
-      llvm::cl::init(false)};
 };
 
 } // end anonymous namespace
@@ -60,13 +55,13 @@ void TestAffineDataCopy::runOnFunction() {
 
   auto loopNest = depthToLoops[0][0];
   auto innermostLoop = depthToLoops[innermostLoopIdx][0];
-  AffineLoadOp load;
-  if (clMemRefFilter || clTestGenerateCopyForMemRegion) {
+  Optional<Value> memrefFilter;
+  if (clMemRefFilter) {
     // Gather MemRef filter. For simplicity, we use the first loaded memref
     // found in the innermost loop.
     for (auto &op : *innermostLoop.getBody()) {
-      if (auto ld = dyn_cast<AffineLoadOp>(op)) {
-        load = ld;
+      if (auto load = dyn_cast<AffineLoadOp>(op)) {
+        memrefFilter = load.getMemRef();
         break;
       }
     }
@@ -77,15 +72,8 @@ void TestAffineDataCopy::runOnFunction() {
                                    /*fastMemorySpace=*/0,
                                    /*tagMemorySpace=*/0,
                                    /*fastMemCapacityBytes=*/32 * 1024 * 1024UL};
-  if (clMemRefFilter) {
-    DenseSet<Operation *> copyNests;
-    affineDataCopyGenerate(loopNest, copyOptions, load.getMemRef(), copyNests);
-  } else if (clTestGenerateCopyForMemRegion) {
-    CopyGenerateResult result;
-    MemRefRegion region(loopNest.getLoc());
-    region.compute(load, /*loopDepth=*/0);
-    generateCopyForMemRegion(region, loopNest, copyOptions, result);
-  }
+  DenseSet<Operation *> copyNests;
+  affineDataCopyGenerate(loopNest, copyOptions, memrefFilter, copyNests);
 }
 
 namespace mlir {

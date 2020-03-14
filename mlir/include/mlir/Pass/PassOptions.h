@@ -69,6 +69,18 @@ private:
     }
   };
 
+  /// The specific parser to use depending on llvm::cl parser used. This is only
+  /// necessary because we need to provide additional methods for certain data
+  /// type parsers.
+  /// TODO(riverriddle) We should upstream the methods in GenericOptionParser to
+  /// avoid the need to do this.
+  template <typename DataType>
+  using OptionParser =
+      std::conditional_t<std::is_base_of<llvm::cl::generic_parser_base,
+                                         llvm::cl::parser<DataType>>::value,
+                         GenericOptionParser<DataType>,
+                         llvm::cl::parser<DataType>>;
+
   /// Utility methods for printing option values.
   template <typename DataT>
   static void printValue(raw_ostream &os, GenericOptionParser<DataT> &parser,
@@ -88,34 +100,23 @@ private:
   }
 
 public:
-  /// The specific parser to use depending on llvm::cl parser used. This is only
-  /// necessary because we need to provide additional methods for certain data
-  /// type parsers.
-  /// TODO(riverriddle) We should upstream the methods in GenericOptionParser to
-  /// avoid the need to do this.
-  template <typename DataType>
-  using OptionParser =
-      std::conditional_t<std::is_base_of<llvm::cl::generic_parser_base,
-                                         llvm::cl::parser<DataType>>::value,
-                         GenericOptionParser<DataType>,
-                         llvm::cl::parser<DataType>>;
-
   /// This class represents a specific pass option, with a provided data type.
-  template <typename DataType, typename OptionParser = OptionParser<DataType>>
-  class Option
-      : public llvm::cl::opt<DataType, /*ExternalStorage=*/false, OptionParser>,
-        public OptionBase {
+  template <typename DataType>
+  class Option : public llvm::cl::opt<DataType, /*ExternalStorage=*/false,
+                                      OptionParser<DataType>>,
+                 public OptionBase {
   public:
     template <typename... Args>
     Option(PassOptions &parent, StringRef arg, Args &&... args)
-        : llvm::cl::opt<DataType, /*ExternalStorage=*/false, OptionParser>(
-              arg, llvm::cl::sub(parent), std::forward<Args>(args)...) {
+        : llvm::cl::opt<DataType, /*ExternalStorage=*/false,
+                        OptionParser<DataType>>(arg, llvm::cl::sub(parent),
+                                                std::forward<Args>(args)...) {
       assert(!this->isPositional() && !this->isSink() &&
              "sink and positional options are not supported");
       parent.options.push_back(this);
     }
     using llvm::cl::opt<DataType, /*ExternalStorage=*/false,
-                        OptionParser>::operator=;
+                        OptionParser<DataType>>::operator=;
     ~Option() override = default;
 
   private:
@@ -130,22 +131,22 @@ public:
 
     /// Copy the value from the given option into this one.
     void copyValueFrom(const OptionBase &other) final {
-      this->setValue(static_cast<const Option<DataType, OptionParser> &>(other)
-                         .getValue());
+      this->setValue(static_cast<const Option<DataType> &>(other).getValue());
     }
   };
 
   /// This class represents a specific pass option that contains a list of
   /// values of the provided data type.
-  template <typename DataType, typename OptionParser = OptionParser<DataType>>
-  class ListOption
-      : public llvm::cl::list<DataType, /*StorageClass=*/bool, OptionParser>,
-        public OptionBase {
+  template <typename DataType>
+  class ListOption : public llvm::cl::list<DataType, /*StorageClass=*/bool,
+                                           OptionParser<DataType>>,
+                     public OptionBase {
   public:
     template <typename... Args>
     ListOption(PassOptions &parent, StringRef arg, Args &&... args)
-        : llvm::cl::list<DataType, /*StorageClass=*/bool, OptionParser>(
-              arg, llvm::cl::sub(parent), std::forward<Args>(args)...) {
+        : llvm::cl::list<DataType, /*StorageClass=*/bool,
+                         OptionParser<DataType>>(arg, llvm::cl::sub(parent),
+                                                 std::forward<Args>(args)...) {
       assert(!this->isPositional() && !this->isSink() &&
              "sink and positional options are not supported");
       parent.options.push_back(this);
@@ -153,7 +154,7 @@ public:
     ~ListOption() override = default;
 
     /// Allow assigning from an ArrayRef.
-    ListOption<DataType, OptionParser> &operator=(ArrayRef<DataType> values) {
+    ListOption<DataType> &operator=(ArrayRef<DataType> values) {
       (*this)->assign(values.begin(), values.end());
       return *this;
     }
@@ -176,8 +177,7 @@ public:
     /// Copy the value from the given option into this one.
     void copyValueFrom(const OptionBase &other) final {
       (*this) = ArrayRef<DataType>(
-          (ListOption<DataType, OptionParser> &)(const_cast<OptionBase &>(
-              other)));
+          (ListOption<DataType> &)(const_cast<OptionBase &>(other)));
     }
   };
 

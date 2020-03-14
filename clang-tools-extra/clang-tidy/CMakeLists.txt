@@ -51,7 +51,6 @@ add_subdirectory(google)
 add_subdirectory(hicpp)
 add_subdirectory(linuxkernel)
 add_subdirectory(llvm)
-add_subdirectory(llvmlibc)
 add_subdirectory(misc)
 add_subdirectory(modernize)
 if(CLANG_ENABLE_STATIC_ANALYZER)
@@ -76,7 +75,6 @@ set(ALL_CLANG_TIDY_CHECKS
   clangTidyHICPPModule
   clangTidyLinuxKernelModule
   clangTidyLLVMModule
-  clangTidyLLVMLibcModule
   clangTidyMiscModule
   clangTidyModernizeModule
   clangTidyObjCModule

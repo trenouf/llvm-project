@@ -12,10 +12,11 @@
 
 let Component = "Parse" in {
 
-def err_asm_qualifier_ignored : Error<
-  "expected 'volatile', 'inline', 'goto', or '('">, CatInlineAsm;
-def err_global_asm_qualifier_ignored : Error<
-  "meaningless '%0' on asm outside function">, CatInlineAsm;
+def warn_asm_qualifier_ignored : Warning<
+  "ignored %0 qualifier on asm">, CatInlineAsm, InGroup<ASMIgnoredQualifier>;
+def warn_file_asm_volatile : Warning<
+  "meaningless 'volatile' on asm outside function">, CatInlineAsm,
+  InGroup<ASMIgnoredQualifier>;
 
 let CategoryName = "Inline Assembly Issue" in {
 def err_asm_empty : Error<"__asm used with no assembly instructions">;
@@ -28,7 +29,6 @@ def err_gnu_inline_asm_disabled : Error<
   "GNU-style inline assembly is disabled">;
 def err_asm_goto_cannot_have_output : Error<
   "'asm goto' cannot have output constraints">;
-def err_asm_duplicate_qual : Error<"duplicate asm qualifier '%0'">;
 }
 
 let CategoryName = "Parse Issue" in {

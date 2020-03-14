@@ -122,15 +122,13 @@ inline void registerAllPasses() {
   // SPIR-V
   spirv::createDecorateSPIRVCompositeTypeLayoutPass();
   spirv::createLowerABIAttributesPass();
-  spirv::createUpdateVersionCapabilityExtensionPass();
   createConvertGPUToSPIRVPass();
   createConvertStandardToSPIRVPass();
   createLegalizeStdOpsForSPIRVLoweringPass();
   createLinalgToSPIRVPass();
 
   // Vulkan
-  createConvertGpuLaunchFuncToVulkanLaunchFuncPass();
-  createConvertVulkanLaunchFuncToVulkanCallsPass();
+  createConvertGpuLaunchFuncToVulkanCallsPass();
 }
 
 } // namespace mlir

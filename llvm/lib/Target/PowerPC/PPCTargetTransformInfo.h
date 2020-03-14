@@ -33,8 +33,7 @@ class PPCTTIImpl : public BasicTTIImplBase<PPCTTIImpl> {
 
   const PPCSubtarget *getST() const { return ST; }
   const PPCTargetLowering *getTLI() const { return TLI; }
-  bool mightUseCTR(BasicBlock *BB, TargetLibraryInfo *LibInfo,
-                   SmallPtrSetImpl<const Value *> &Visited);
+  bool mightUseCTR(BasicBlock *BB, TargetLibraryInfo *LibInfo);
 
 public:
   explicit PPCTTIImpl(const PPCTargetMachine *TM, const Function &F)
@@ -112,12 +111,10 @@ public:
                                  bool UseMaskForCond = false,
                                  bool UseMaskForGaps = false);
   unsigned getIntrinsicInstrCost(Intrinsic::ID ID, Type *RetTy,
-                                 ArrayRef<Value *> Args, FastMathFlags FMF,
-                                 unsigned VF, const Instruction *I = nullptr);
+            ArrayRef<Value*> Args, FastMathFlags FMF, unsigned VF);
   unsigned getIntrinsicInstrCost(Intrinsic::ID ID, Type *RetTy,
-                                 ArrayRef<Type *> Tys, FastMathFlags FMF,
-                                 unsigned ScalarizationCostPassed = UINT_MAX,
-                                 const Instruction *I = nullptr);
+            ArrayRef<Type*> Tys, FastMathFlags FMF,
+            unsigned ScalarizationCostPassed = UINT_MAX);
 
   /// @}
 };

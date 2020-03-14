@@ -12,7 +12,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Dialect/SPIRV/Serialization.h"
-#include "mlir/Dialect/SPIRV/SPIRVAttributes.h"
 #include "mlir/Dialect/SPIRV/SPIRVBinaryUtils.h"
 #include "mlir/Dialect/SPIRV/SPIRVDialect.h"
 #include "mlir/Dialect/SPIRV/SPIRVOps.h"
@@ -47,10 +46,6 @@ protected:
     state.addAttribute("memory_model",
                        builder.getI32IntegerAttr(
                            static_cast<uint32_t>(spirv::MemoryModel::GLSL450)));
-    state.addAttribute("vce_triple",
-                       spirv::VerCapExtAttr::get(
-                           spirv::Version::V_1_0, ArrayRef<spirv::Capability>(),
-                           ArrayRef<spirv::Extension>(), &context));
     spirv::ModuleOp::build(&builder, state);
     module = cast<spirv::ModuleOp>(Operation::create(state));
   }

@@ -184,9 +184,7 @@ def DotOp : LinalgStructured_Op<"dot", [NInputs<2>, NOutputs<1>]> {
       MLIRContext *context = getContext();
       auto r_i = getAffineDimExpr(0, context);
       return SmallVector<AffineMap, 8>{
-        AffineMap::get(1, 0, {r_i}),
-        AffineMap::get(1, 0, {r_i}),
-        AffineMap::get(1, 0, context)};
+        AffineMap::get(1, 0, {r_i}), AffineMap::get(1, 0, {r_i}), AffineMap()};
     }
   }];
 

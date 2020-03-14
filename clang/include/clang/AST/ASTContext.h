@@ -121,7 +121,6 @@ class Preprocessor;
 class Stmt;
 class StoredDeclsMap;
 class TargetAttr;
-class TargetInfo;
 class TemplateDecl;
 class TemplateParameterList;
 class TemplateTemplateParmDecl;
@@ -882,7 +881,7 @@ public:
   void addedLocalImportDecl(ImportDecl *Import);
 
   static ImportDecl *getNextLocalImport(ImportDecl *Import) {
-    return Import->getNextLocalImport();
+    return Import->NextLocalImport;
   }
 
   using import_range = llvm::iterator_range<import_iterator>;
@@ -910,7 +909,13 @@ public:
 
   /// Get the additional modules in which the definition \p Def has
   /// been merged.
-  ArrayRef<Module*> getModulesWithMergedDefinition(const NamedDecl *Def);
+  ArrayRef<Module*> getModulesWithMergedDefinition(const NamedDecl *Def) {
+    auto MergedIt =
+        MergedDefModules.find(cast<NamedDecl>(Def->getCanonicalDecl()));
+    if (MergedIt == MergedDefModules.end())
+      return None;
+    return MergedIt->second;
+  }
 
   /// Add a declaration to the list of declarations that are initialized
   /// for a module. This will typically be a global variable (with internal
