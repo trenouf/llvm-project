@@ -13,7 +13,6 @@ Examples:
   #include "Dinosaur.hpp"     // OK, .hpp files tend not to have definitions.
   #include "Pterodactyl.h"    // OK, .h files tend not to have definitions.
   #include "Velociraptor.cpp" // Warning, filename is suspicious.
-  #import "Stegosaurus.c"     // Warning, fliename is suspicious.
   #include_next <stdio.c>     // Warning, filename is suspicious.
 
 Options
