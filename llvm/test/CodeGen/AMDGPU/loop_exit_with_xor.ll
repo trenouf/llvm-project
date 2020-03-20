@@ -1,3 +1,5 @@
+; Modifications Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
+; Notified per clause 4(b) of the license.
 ; RUN: llc -mtriple=amdgcn--amdpal -mcpu=gfx803 -verify-machineinstrs < %s | FileCheck -check-prefix=GCN %s
 
 ; Where the mask of lanes wanting to exit the loop on this iteration is not
@@ -6,11 +8,11 @@
 ; with exec.
 
 ; GCN-LABEL: {{^}}needs_and:
-; GCN: s_xor_b64 [[REG1:[^ ,]*]], {{[^ ,]*, -1$}}
-; GCN: s_and_b64 [[REG2:[^ ,]*]], exec, [[REG1]]
-; GCN: s_or_b64 [[REG3:[^ ,]*]], [[REG2]],
-; GCN: s_andn2_b64 exec, exec, [[REG3]]
 
+; GCN: s_or_b64 exec, exec, [[REG1:[^ ,]*]]
+; GCN: s_andn2_b64 exec, exec, [[REG2:[^ ,]*]]
+; GCN: s_or_b64 [[REG2:[^ ,]*]], [[REG1:[^ ,]*]], [[REG2:[^ ,]*]]
+; GCN: s_or_b64 exec, exec, [[REG2:[^ ,]*]]
 define void @needs_and(i32 %arg) {
 entry:
   br label %loop

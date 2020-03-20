@@ -859,6 +859,8 @@ bool GCNPassConfig::addPreISel() {
   // FIXME: We need to run a pass to propagate the attributes when calls are
   // supported.
 
+  addPass(createSinkingPass());
+
   if (EnableConditionalDiscardTransformations)
     addPass(createAMDGPUConditionalDiscardPass());
 
@@ -868,7 +870,6 @@ bool GCNPassConfig::addPreISel() {
   if (!LateCFGStructurize) {
     addPass(createStructurizeCFGPass(true)); // true -> SkipUniformRegions
   }
-  addPass(createSinkingPass());
 
   // This is a temporary fix for the issue of dealing with in loop uniform values
   // where the uses out of the loop are non-uniform. LCSSA creates a PHI at the
@@ -1003,7 +1004,7 @@ void GCNPassConfig::addOptimizedRegAlloc() {
   insertPass(&RegisterCoalescerID, &SIPreAllocateWWMRegsID, false);
 
   if (EnableDCEInRA)
-    insertPass(&RenameIndependentSubregsID, &DeadMachineInstructionElimID);
+    insertPass(&DetectDeadLanesID, &DeadMachineInstructionElimID);
 
   TargetPassConfig::addOptimizedRegAlloc();
 }
