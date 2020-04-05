@@ -1,3 +1,5 @@
+# Modifications Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
+# Notified per clause 4(b) of the license.
 set(LLVM_LINK_COMPONENTS support)
 
 add_clang_library(clangTidyReadabilityModule
@@ -6,6 +8,7 @@ add_clang_library(clangTidyReadabilityModule
   ConstReturnTypeCheck.cpp
   ContainerSizeEmptyCheck.cpp
   ConvertMemberFunctionsToStatic.cpp
+  DeclarationInlineCommentCheck.cpp
   DeleteNullPointerCheck.cpp
   DeletedDefaultCheck.cpp
   ElseAfterReturnCheck.cpp
@@ -28,6 +31,8 @@ add_clang_library(clangTidyReadabilityModule
   RedundantDeclarationCheck.cpp
   RedundantFunctionPtrDereferenceCheck.cpp
   RedundantMemberInitCheck.cpp
+  RedundantNullptrComparisonCheck.cpp
+  RedundantParenthesesCheck.cpp
   RedundantPreprocessorCheck.cpp
   RedundantSmartptrGetCheck.cpp
   RedundantStringCStrCheck.cpp

@@ -3,6 +3,8 @@
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+// Modifications Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
+// Notified per clause 4(b) of the license.
 //
 //===----------------------------------------------------------------------===//
 
@@ -115,11 +117,15 @@ BracesAroundStatementsCheck::BracesAroundStatementsCheck(
     StringRef Name, ClangTidyContext *Context)
     : ClangTidyCheck(Name, Context),
       // Always add braces by default.
-      ShortStatementLines(Options.get("ShortStatementLines", 0U)) {}
+      ShortStatementLines(Options.get("ShortStatementLines", 0U)),
+      AddBraces(Options.get("AddBraces", true)),
+      RemoveUnnecessaryBraces(Options.get("RemoveUnnecessaryBraces", false)) {}
 
 void BracesAroundStatementsCheck::storeOptions(
     ClangTidyOptions::OptionMap &Opts) {
   Options.store(Opts, "ShortStatementLines", ShortStatementLines);
+  Options.store(Opts, "AddBraces", AddBraces);
+  Options.store(Opts, "RemoveUnnecessaryBraces", RemoveUnnecessaryBraces);
 }
 
 void BracesAroundStatementsCheck::registerMatchers(MatchFinder *Finder) {
@@ -201,9 +207,24 @@ BracesAroundStatementsCheck::findRParenLoc(const IfOrWhileStmt *S,
   return RParenLoc;
 }
 
+/// Check for adding braces to a simple statement or removing braces from a
+/// compound statement.
+/// Returns whether braces were added.
+bool BracesAroundStatementsCheck::checkStmt(
+    const MatchFinder::MatchResult &Result, const Stmt *S,
+    SourceLocation InitialLoc, SourceLocation EndLocHint) {
+  if (!S)
+    return false;
+  if (auto CS = dyn_cast<CompoundStmt>(S)) {
+    checkCompoundStmt(Result, CS, InitialLoc, EndLocHint);
+    return false;
+  }
+  return checkSimpleStmt(Result, S, InitialLoc, EndLocHint);
+}
+
 /// Determine if the statement needs braces around it, and add them if it does.
 /// Returns true if braces where added.
-bool BracesAroundStatementsCheck::checkStmt(
+bool BracesAroundStatementsCheck::checkSimpleStmt(
     const MatchFinder::MatchResult &Result, const Stmt *S,
     SourceLocation InitialLoc, SourceLocation EndLocHint) {
   // 1) If there's a corresponding "else" or "while", the check inserts "} "
@@ -213,12 +234,8 @@ bool BracesAroundStatementsCheck::checkStmt(
   // token, the check inserts "\n}" right before that token.
   // 3) Otherwise the check finds the end of line (possibly after some block or
   // line comments) and inserts "\n}" right before that EOL.
-  if (!S || isa<CompoundStmt>(S)) {
-    // Already inside braces.
-    return false;
-  }
 
-  if (!InitialLoc.isValid())
+  if (!InitialLoc.isValid() || !AddBraces)
     return false;
   const SourceManager &SM = *Result.SourceManager;
   const ASTContext *Context = Result.Context;
@@ -269,6 +286,84 @@ bool BracesAroundStatementsCheck::checkStmt(
   Diag << FixItHint::CreateInsertion(StartLoc, " {")
        << FixItHint::CreateInsertion(EndLoc, ClosingInsertion);
   return true;
+}
+
+/// Determine if the compound statement has unnecessary braces around a single
+/// simple statement, and remove them if it does and the line count is no more
+/// than the limit.
+void BracesAroundStatementsCheck::checkCompoundStmt(
+    const MatchFinder::MatchResult &Result, const CompoundStmt *S,
+    SourceLocation InitialLoc, SourceLocation EndLocHint) {
+  if (!RemoveUnnecessaryBraces || S->size() != 1)
+    return;
+  const SourceManager &SM = *Result.SourceManager;
+  if (SM.isMacroBodyExpansion(S->getLBracLoc()) ||
+      SM.isMacroArgExpansion(S->getLBracLoc()))
+    return;
+
+  // Get the range we would remove for the '{'. That includes:
+  // - the '{' itself;
+  // - if the '{' is on a line by itself, then the whole line;
+  // - otherwise, whitespace after it as far as the end if the line.
+  const ASTContext *Context = Result.Context;
+  SourceLocation LBracStart = S->getLBracLoc();
+  SourceLocation LBracEnd = Lexer::getLocForEndOfToken(S->getLBracLoc(), 0, SM,
+                                                       Context->getLangOpts());
+  bool WholeLine = true;
+  for (;;) {
+    auto CharData = SM.getCharacterData(LBracEnd);
+    if (!CharData || !isWhitespace(*CharData)) {
+      WholeLine = false;
+      break;
+    }
+    if (*CharData == '\n')
+      break;
+    LBracEnd = LBracEnd.getLocWithOffset(1);
+  }
+
+  SourceLocation Loc = LBracStart;
+  for (;;) {
+    Loc = Loc.getLocWithOffset(-1);
+    auto CharData = SM.getCharacterData(Loc);
+    if (!CharData || !isWhitespace(*CharData))
+      break;
+    if (*CharData == '\n') {
+      if (WholeLine)
+        LBracStart = Loc;
+      break;
+    }
+  }
+
+  // Get the range we would remove for the '}'. That includes:
+  // - the '}' itself;
+  // - whitespace before it as far as the start of the line, and including the
+  //   NL if we reach the start of the line.
+  SourceLocation RBracStart = S->getRBracLoc();
+  SourceLocation RBracEnd = Lexer::getLocForEndOfToken(S->getRBracLoc(), 0, SM,
+                                                       Context->getLangOpts());
+  for (;;) {
+    SourceLocation Loc = RBracStart.getLocWithOffset(-1);
+    auto CharData = SM.getCharacterData(Loc);
+    if (!CharData || !isWhitespace(*CharData))
+      break;
+    RBracStart = Loc;
+    if (*CharData == '\n')
+      break;
+  }
+
+  // Calculate the number of lines the statement would take if we remove the
+  // braces. Bail if that is more than the limit.
+  unsigned NumLines = SM.getSpellingLineNumber(S->getRBracLoc()) -
+                      SM.getSpellingLineNumber(S->getLBracLoc()) - 1;
+  if (NumLines >= ShortStatementLines)
+    return;
+
+  // Remove the braces.
+  auto Diag = diag(S->getLBracLoc(), "unnecessary braces");
+  SourceRange LBracRange(LBracStart, LBracEnd);
+  SourceRange RBracRange(RBracStart, RBracEnd);
+  Diag << FixItHint::CreateRemoval(CharSourceRange::getCharRange(LBracRange));
+  Diag << FixItHint::CreateRemoval(CharSourceRange::getCharRange(RBracRange));
 }
 
 void BracesAroundStatementsCheck::onEndOfTranslationUnit() {

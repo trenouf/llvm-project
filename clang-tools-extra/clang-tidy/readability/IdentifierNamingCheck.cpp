@@ -3,6 +3,8 @@
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+// Modifications Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
+// Notified per clause 4(b) of the license.
 //
 //===----------------------------------------------------------------------===//
 
@@ -146,9 +148,12 @@ IdentifierNamingCheck::IdentifierNamingCheck(StringRef Name,
         fromString(Options.get((Name + "Case").str(), ""));
     auto prefix = Options.get((Name + "Prefix").str(), "");
     auto postfix = Options.get((Name + "Suffix").str(), "");
+    auto removePrefixes = Options.get((Name + "RemovePrefixes").str(), "");
+    auto ignoreRegex = Options.get((Name + "IgnoreRegex").str(), "");
 
     if (caseOptional || !prefix.empty() || !postfix.empty()) {
-      NamingStyles.push_back(NamingStyle(caseOptional, prefix, postfix));
+      NamingStyles.push_back(NamingStyle(caseOptional, prefix, postfix,
+                                         removePrefixes, ignoreRegex));
     } else {
       NamingStyles.push_back(llvm::None);
     }
@@ -189,11 +194,43 @@ void IdentifierNamingCheck::storeOptions(ClangTidyOptions::OptionMap &Opts) {
                     NamingStyles[i]->Prefix);
       Options.store(Opts, (StyleNames[i] + "Suffix").str(),
                     NamingStyles[i]->Suffix);
+      Options.store(Opts, (StyleNames[i] + "RemovePrefixes").str(),
+                    NamingStyles[i]->RemovePrefixes);
     }
   }
 
   Options.store(Opts, "IgnoreFailedSplit", IgnoreFailedSplit);
   Options.store(Opts, "IgnoreMainLikeFunctions", IgnoreMainLikeFunctions);
+}
+
+// Check whether Name starts with any prefix in the comma-separated list in
+// Style.RemovePrefixes. A prefix is not matched if the prefix ends with alpha
+// and the remainder of the name does not start with underscore or alpha of
+// the opposite case.
+static size_t checkRemovePrefix(StringRef Name,
+                                IdentifierNamingCheck::NamingStyle Style) {
+  StringRef RemovePrefixes = Style.RemovePrefixes;
+  while (!RemovePrefixes.empty()) {
+    // Find the size of this prefix up to ',' separator.
+    size_t Size = std::min(RemovePrefixes.find(','), RemovePrefixes.size());
+    if (!Size) {
+      RemovePrefixes = RemovePrefixes.drop_front(1);
+      continue;
+    }
+    StringRef RemovePrefix = RemovePrefixes.slice(0, Size);
+    // Check the prefix.
+    if (Name.startswith(RemovePrefix) && Name.size() != Size) {
+      // Name starts with the prefix. If the prefix ends with alpha, we only
+      // count it if the rest of the name starts with alpha of the opposite
+      // case.
+      if (!isalpha(RemovePrefix[Size - 1]) || Name[Size] == '_')
+        return Size;
+      if (isalpha(Name[Size]) && ((RemovePrefix[Size - 1] ^ Name[Size]) & 0x20))
+        return Size;
+    }
+    RemovePrefixes = RemovePrefixes.drop_front(Size);
+  }
+  return 0;
 }
 
 static bool matchesStyle(StringRef Name,
@@ -208,9 +245,17 @@ static bool matchesStyle(StringRef Name,
       llvm::Regex("^[a-z]([a-z0-9]*(_[A-Z])?)*"),
   };
 
+  // Ignore this identifier if it matches the regex in Style.IgnoreRegex.
+  if (!Style.IgnoreRegex.empty() && llvm::Regex(Style.IgnoreRegex).match(Name))
+    return true;
+
   if (Name.startswith(Style.Prefix))
     Name = Name.drop_front(Style.Prefix.size());
   else
+    return false;
+
+  // Check each prefix in RemovePrefixes. (Note we do this after dropping the prefix.)
+  if (checkRemovePrefix(Name, Style))
     return false;
 
   if (Name.endswith(Style.Suffix))
@@ -389,6 +434,13 @@ static bool isParamInMainLikeFunction(const ParmVarDecl &ParmDecl,
 static std::string
 fixupWithStyle(StringRef Name,
                const IdentifierNamingCheck::NamingStyle &Style) {
+  if (Name.startswith(Style.Prefix))
+    Name = Name.drop_front(Style.Prefix.size());
+  if (Name.startswith(Style.Suffix))
+    Name = Name.drop_back(Style.Suffix.size());
+  // Check each prefix in RemovePrefixes. (Note we do this after dropping the prefix.)
+  Name = Name.drop_front(checkRemovePrefix(Name, Style));
+
   const std::string Fixed = fixupWithCase(
       Name, Style.Case.getValueOr(IdentifierNamingCheck::CaseType::CT_AnyCase));
   StringRef Mid = StringRef(Fixed).trim("_");
@@ -587,6 +639,7 @@ static StyleKind findStyleKind(
   }
 
   if (const auto *Decl = dyn_cast<CXXMethodDecl>(D)) {
+#if 0
     if (Decl->isMain() || !Decl->isUserProvided() ||
         Decl->size_overridden_methods() > 0)
       return SK_Invalid;
@@ -599,6 +652,7 @@ static StyleKind findStyleKind(
     CXXBasePaths UnusedPaths;
     if (Decl->getParent()->lookupInBases(FindHidden, UnusedPaths))
       return SK_Invalid;
+#endif
 
     if (Decl->isConstexpr() && NamingStyles[SK_ConstexprMethod])
       return SK_ConstexprMethod;

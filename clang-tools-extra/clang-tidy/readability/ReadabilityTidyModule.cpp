@@ -3,6 +3,8 @@
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+// Modifications Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
+// Notified per clause 4(b) of the license.
 //
 //===----------------------------------------------------------------------===//
 
@@ -14,6 +16,7 @@
 #include "ConstReturnTypeCheck.h"
 #include "ContainerSizeEmptyCheck.h"
 #include "ConvertMemberFunctionsToStatic.h"
+#include "DeclarationInlineCommentCheck.h"
 #include "DeleteNullPointerCheck.h"
 #include "DeletedDefaultCheck.h"
 #include "ElseAfterReturnCheck.h"
@@ -34,6 +37,8 @@
 #include "RedundantDeclarationCheck.h"
 #include "RedundantFunctionPtrDereferenceCheck.h"
 #include "RedundantMemberInitCheck.h"
+#include "RedundantNullptrComparisonCheck.h"
+#include "RedundantParenthesesCheck.h"
 #include "RedundantPreprocessorCheck.h"
 #include "RedundantSmartptrGetCheck.h"
 #include "RedundantStringCStrCheck.h"
@@ -63,6 +68,8 @@ public:
         "readability-container-size-empty");
     CheckFactories.registerCheck<ConvertMemberFunctionsToStatic>(
         "readability-convert-member-functions-to-static");
+    CheckFactories.registerCheck<DeclarationInlineCommentCheck>(
+        "readability-declaration-inline-comment");
     CheckFactories.registerCheck<DeleteNullPointerCheck>(
         "readability-delete-null-pointer");
     CheckFactories.registerCheck<DeletedDefaultCheck>(
@@ -95,6 +102,10 @@ public:
         "readability-redundant-function-ptr-dereference");
     CheckFactories.registerCheck<RedundantMemberInitCheck>(
         "readability-redundant-member-init");
+    CheckFactories.registerCheck<RedundantNullptrComparisonCheck>(
+        "readability-redundant-nullptr-comparison");
+    CheckFactories.registerCheck<RedundantParenthesesCheck>(
+        "readability-redundant-parentheses");
     CheckFactories.registerCheck<RedundantPreprocessorCheck>(
         "readability-redundant-preprocessor");
     CheckFactories.registerCheck<SimplifySubscriptExprCheck>(

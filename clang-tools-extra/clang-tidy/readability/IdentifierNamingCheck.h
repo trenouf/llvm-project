@@ -3,6 +3,8 @@
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+// Modifications Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
+// Notified per clause 4(b) of the license.
 //
 //===----------------------------------------------------------------------===//
 
@@ -25,6 +27,8 @@ namespace readability {
 ///
 /// It also supports a fixed prefix and suffix that will be prepended or
 /// appended to the identifiers, regardless of the casing.
+///
+/// It also supports removal of one of a list of prefixes.
 ///
 /// Many configuration options are available, in order to be able to create
 /// different rules for different kind of identifier. In general, the
@@ -51,12 +55,16 @@ public:
     NamingStyle() = default;
 
     NamingStyle(llvm::Optional<CaseType> Case, const std::string &Prefix,
-                const std::string &Suffix)
-        : Case(Case), Prefix(Prefix), Suffix(Suffix) {}
+                const std::string &Suffix, const std::string &RemovePrefixes,
+                const std::string &IgnoreRegex)
+        : Case(Case), Prefix(Prefix), Suffix(Suffix),
+          RemovePrefixes(RemovePrefixes), IgnoreRegex(IgnoreRegex) {}
 
     llvm::Optional<CaseType> Case;
     std::string Prefix;
     std::string Suffix;
+    std::string RemovePrefixes;
+    std::string IgnoreRegex;
   };
 
 private:
